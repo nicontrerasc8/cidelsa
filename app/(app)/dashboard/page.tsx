@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getDefaultDashboardPath } from "@/lib/auth/roles";
 import { getCurrentUser } from "@/lib/auth/session";
 
-export default async function HomePage() {
+export default async function DashboardPage() {
   const user = await getCurrentUser();
 
   if (user) {
