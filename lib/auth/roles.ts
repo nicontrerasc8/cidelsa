@@ -18,6 +18,8 @@ export const sellerDashboardRoles = [
 export const roleLabels: Record<AppRole, string> = {
   administrador_comercial: "Administrador Comercial",
   gerente_comercial: "Gerente Comercial",
+
+  
   jefe_area: "Jefe de Area / Linea",
   ejecutivo_ventas: "Ejecutivo de Ventas",
   directorio: "Directorio",
