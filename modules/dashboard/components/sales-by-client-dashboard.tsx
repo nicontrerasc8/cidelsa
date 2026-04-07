@@ -6,13 +6,13 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { BarChart3, Filter, Users } from "lucide-react";
 
+import { ChartContainer } from "@/components/charts/chart-container";
 import { KpiCard } from "@/components/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -201,7 +201,7 @@ export function SalesByClientDashboard({
 
   const yearOptions = useMemo(
     () => [
-      { label: "Todos los anos", value: ALL_VALUE },
+      { label: "Todos los Años", value: ALL_VALUE },
       ...summary.years.map((year) => ({ label: String(year), value: String(year) })),
     ],
     [summary.years],
@@ -220,13 +220,13 @@ export function SalesByClientDashboard({
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/80">
               Ranking de clientes con clasificacion ABC sobre la data cargada en JSON, con filtros
-              por ano, negocio y linea.
+              por Año, negocio y linea.
             </p>
           </div>
 
           <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-white/10 p-4 backdrop-blur md:grid-cols-3">
             <FilterSelect
-              label="Ano"
+              label="Año"
               value={selectedYear}
               options={yearOptions}
               onChange={setSelectedYear}
@@ -263,7 +263,7 @@ export function SalesByClientDashboard({
           </CardHeader>
           <CardContent className="h-[430px]">
             {topClients.length ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ChartContainer>
                 <BarChart data={topClients} layout="vertical" margin={{ left: 24, right: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" tickFormatter={(value) => formatCurrency(Number(value))} />
@@ -286,7 +286,7 @@ export function SalesByClientDashboard({
                     ))}
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <div className="flex h-full items-center justify-center rounded-3xl border border-dashed text-sm text-muted-foreground">
                 No hay datos para los filtros seleccionados.

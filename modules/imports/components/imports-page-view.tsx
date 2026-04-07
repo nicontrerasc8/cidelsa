@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -63,7 +63,7 @@ const ACCOUNTING_PERIOD_OPTIONS = [
 
 interface UploadResponse {
   fileName: string;
-  importYear: number;
+  importYear: number | null;
   sheetName: string;
   columns: string[];
   previewRows: Record<string, unknown>[];
@@ -72,9 +72,102 @@ interface UploadResponse {
   errorRows: number;
 }
 
-function formatPreviewCell(value: unknown) {
+const MONTH_LABELS = [
+  "",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Setiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+] as const;
+
+function normalizePreviewColumnKey(header: string) {
+  const normalized = header
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const aliases: Record<string, string> = {
+    ano: "anio",
+    situacion: "situacion",
+    mes: "mes",
+    semana: "semana",
+    "fecha registro": "fecha_registro",
+    "fecha de registro": "fecha_registro",
+    "fecha adjudicacion": "fecha_adjudicacion",
+    "fecha de adjudicacion": "fecha_adjudicacion",
+    "fecha facturacion": "fecha_facturacion",
+    "fecha de facturacion": "fecha_facturacion",
+    "orden venta": "orden_venta",
+    "orden de venta": "orden_venta",
+    factura: "factura",
+    oc: "oc",
+    "sector ax": "sector_ax",
+    sector: "sector",
+    ruc: "ruc",
+    cliente: "cliente",
+    negocio: "negocio",
+    linea: "linea",
+    sublinea: "sublinea",
+    "sub linea": "sublinea",
+    "sub-linea": "sublinea",
+    grupo: "grupo",
+    "nombre de proyecto": "proyecto",
+    proyecto: "proyecto",
+    codigo: "codigo_articulo",
+    "codigo articulo": "codigo_articulo",
+    articulo: "articulo",
+    dimension1: "dimension1",
+    dimension2: "dimension2",
+    "dimension 3": "dimension3",
+    dimension3: "dimension3",
+    cantidad: "cantidad",
+    um: "um",
+    etapa: "etapa",
+    "motivo perdida": "motivo_perdida",
+    "bl / proy": "tipo_pipeline",
+    "bl/proy": "tipo_pipeline",
+    "tipo pipeline": "tipo_pipeline",
+    pipeline: "pipeline",
+    licitaciones: "licitacion_flag",
+    licitacion: "licitacion_flag",
+    probabilidad: "probabilidad_num",
+    "ventas s/": "ventas_monto",
+    "ventas s/.": "ventas_monto",
+    ventas: "ventas_monto",
+    proyeccion: "proyeccion_monto",
+    costo: "costo_monto",
+    margen: "margen_monto",
+    porcentaje: "porcentaje_num",
+    "ejecutivo de ventas": "ejecutivo",
+    ejecutivo: "ejecutivo",
+    observaciones: "observaciones",
+  };
+
+  return aliases[normalized] ?? normalized.replace(/\s+/g, "_");
+}
+
+function formatPreviewCell(value: unknown, columnKey?: string) {
   if (value === null || value === undefined || value === "") return "";
   if (value instanceof Date) return value.toISOString();
+  if (
+    columnKey === "mes" &&
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 12
+  ) {
+    return MONTH_LABELS[value] ?? String(value);
+  }
   if (
     typeof value === "string" ||
     typeof value === "number" ||
@@ -171,6 +264,7 @@ function ImportUploadCard({
   successMessage,
   consoleLabel,
   accentClassName,
+  showImportYear = true,
   businessOptions,
   periodOptions,
 }: {
@@ -183,10 +277,12 @@ function ImportUploadCard({
   successMessage: string;
   consoleLabel: string;
   accentClassName: string;
+  showImportYear?: boolean;
   businessOptions?: ReadonlyArray<{ label: string; value: string }>;
   periodOptions?: ReadonlyArray<{ label: string; value: string }>;
 }) {
   const router = useRouter();
+  const fileInputId = useId();
   const [file, setFile] = useState<File | null>(null);
   const [importYear, setImportYear] = useState(String(new Date().getFullYear()));
   const [selectedBusiness, setSelectedBusiness] = useState(
@@ -205,14 +301,20 @@ function ImportUploadCard({
   const previewColumns = useMemo(() => {
     if (!preview) return [];
 
-    const orderedColumns = [...preview.columns];
-    const seen = new Set(orderedColumns);
+    const orderedColumns = preview.columns.map((column) => ({
+      key: normalizePreviewColumnKey(column),
+      label: column,
+    }));
+    const seen = new Set(orderedColumns.map((column) => column.key));
 
     for (const row of preview.previewRows) {
       for (const key of Object.keys(row)) {
         if (seen.has(key)) continue;
         seen.add(key);
-        orderedColumns.push(key);
+        orderedColumns.push({
+          key,
+          label: key,
+        });
       }
     }
 
@@ -257,7 +359,9 @@ function ImportUploadCard({
       try {
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("anio", importYear);
+        if (showImportYear) {
+          formData.append("anio", importYear);
+        }
 
         if (businessOptions) {
           formData.append("negocio", selectedBusiness);
@@ -280,7 +384,9 @@ function ImportUploadCard({
 
         console.groupCollapsed(consoleLabel);
         console.log("archivo", file.name);
-        console.log("anio", importYear);
+        if (showImportYear) {
+          console.log("anio", importYear);
+        }
         if (businessOptions) {
           console.log("negocio", selectedBusiness);
         }
@@ -290,6 +396,11 @@ function ImportUploadCard({
         }
         console.log("payload", payload);
         console.log("columnas", payload.columns);
+        console.log(
+          "primeras_10_filas_guardadas",
+          payload.previewRows.slice(0, 10),
+        );
+        console.table(payload.previewRows.slice(0, 10));
         console.table(payload.previewRows);
         console.groupEnd();
 
@@ -299,7 +410,7 @@ function ImportUploadCard({
         toast.success(successMessage);
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "Error durante la importacion.",
+          error instanceof Error ? error.message : "Error durante la importación.",
         );
       }
     });
@@ -321,7 +432,10 @@ function ImportUploadCard({
           </div>
           <Link
             href={templateHref}
-            className={cn(buttonVariants({ variant: "secondary" }))}
+            className={cn(
+              buttonVariants({ variant: "secondary" }),
+              "flex h-12 w-full items-center justify-center gap-2 rounded-2xl border-border/70 bg-background/80 px-6 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:bg-background sm:w-auto sm:min-w-[240px]",
+            )}
           >
             <Download className="size-4" />
             {templateLabel}
@@ -329,16 +443,18 @@ function ImportUploadCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label>Año de carga</Label>
-          <Input
-            type="number"
-            min={2020}
-            max={2100}
-            value={importYear}
-            onChange={(event) => setImportYear(event.target.value)}
-          />
-        </div>
+        {showImportYear ? (
+          <div className="space-y-2">
+            <Label>Año de carga</Label>
+            <Input
+              type="number"
+              min={2020}
+              max={2100}
+              value={importYear}
+              onChange={(event) => setImportYear(event.target.value)}
+            />
+          </div>
+        ) : null}
 
         {businessOptions ? (
           <div className="space-y-2">
@@ -390,29 +506,57 @@ function ImportUploadCard({
           </div>
         ) : null}
 
-        <Input
-          type="file"
-          accept=".xlsx"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-        />
+        <div className="rounded-3xl border border-border/70 bg-muted/20 p-4">
+          <input
+            id={fileInputId}
+            type="file"
+            accept=".xlsx"
+            className="sr-only"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          />
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">
+                Archivo de importación
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Formato soportado actualmente: `.xlsx`. Selecciona el archivo y luego procesa la carga.
+              </p>
+              <div className="inline-flex min-h-9 max-w-full items-center rounded-2xl border border-dashed border-border bg-background/80 px-3 py-2 text-sm text-foreground shadow-sm">
+                <span className="truncate">
+                  {file ? file.name : "Ningún archivo seleccionado"}
+                </span>
+              </div>
+            </div>
+            <Button
+              type="button"
+          
+              className="h-11 rounded-2xl border-border/70 bg-background px-4 shadow-sm"
+              onClick={() => document.getElementById(fileInputId)?.click()}
+            >
+              <UploadCloud className="size-4" />
+              {file ? "Cambiar archivo" : "Seleccionar archivo"}
+            </Button>
+          </div>
+        </div>
 
-        <p className="text-xs text-muted-foreground">
-          Formato soportado actualmente: `.xlsx`.
-        </p>
-
-        <Button onClick={handleSubmit} disabled={isPending || !file}>
+        <Button
+          onClick={handleSubmit}
+          disabled={isPending || !file}
+          className="h-12 w-full rounded-2xl bg-[linear-gradient(90deg,#0f172a_0%,#1d4f91_100%)] text-sm font-semibold text-white shadow-[0_12px_30px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.28)] disabled:translate-y-0 disabled:shadow-none"
+        >
           {isPending ? (
             <LoaderCircle className="size-4 animate-spin" />
           ) : (
             <UploadCloud className="size-4" />
           )}
-          Procesar importacion
+          Procesar importación
         </Button>
 
         {preview ? (
           <div className="rounded-3xl border border-border/70 bg-muted/30 p-5">
             <div className="space-y-1">
-              <p className="text-sm font-medium">Resumen de la ultima carga</p>
+              <p className="text-sm font-medium">Resumen de la última carga</p>
               <p className="text-xs text-muted-foreground">
                 La tabla inferior muestra el payload tal como entra desde el Excel y se guarda en JSON.
               </p>
@@ -465,7 +609,7 @@ function ImportUploadCard({
               </div>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">
-                  Validas
+                  Válidas
                 </p>
                 <p className="mt-2 text-sm font-semibold text-emerald-900">
                   {preview.validRows}
@@ -510,10 +654,10 @@ function ImportUploadCard({
                     <tr className="border-b">
                       {previewColumns.map((column) => (
                         <th
-                          key={column}
+                          key={column.key}
                           className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap"
                         >
-                          {column}
+                          {column.label}
                         </th>
                       ))}
                     </tr>
@@ -526,11 +670,11 @@ function ImportUploadCard({
                       >
                         {previewColumns.map((column) => (
                           <td
-                            key={`${previewPage}-${index}-${column}`}
+                            key={`${previewPage}-${index}-${column.key}`}
                             className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap"
                           >
                             <div className="whitespace-pre-wrap">
-                              {formatPreviewCell(row[column]) || (
+                              {formatPreviewCell(row[column.key], column.key) || (
                                 <span className="text-muted-foreground/60">-</span>
                               )}
                             </div>
@@ -557,7 +701,7 @@ function ImportUploadCard({
                     Anterior
                   </Button>
                   <div className="min-w-28 text-center text-sm text-muted-foreground">
-                    Pagina {previewPage} de {totalPreviewPages}
+                    Página {previewPage} de {totalPreviewPages}
                   </div>
                   <Button
                     type="button"
@@ -575,7 +719,7 @@ function ImportUploadCard({
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-border p-8 text-sm text-muted-foreground">
-              Aun no hay preview. Sube un archivo para validar columnas y ver el muestreo inicial.
+              Aún no hay preview. Sube un archivo para validar columnas y ver el muestreo inicial.
             </div>
           )}
         </div>
@@ -590,12 +734,14 @@ function ImportHistoryCard({
   deleteEndpointBase,
   emptyLabel,
   editBasePath,
+  showYearColumn = true,
 }: {
   title: string;
   imports: ImportRecord[];
   deleteEndpointBase: string;
   emptyLabel: string;
   editBasePath?: string;
+  showYearColumn?: boolean;
 }) {
   const router = useRouter();
   const [deletingImportId, setDeletingImportId] = useState<string | null>(null);
@@ -637,9 +783,10 @@ function ImportHistoryCard({
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <TopScrollSync minWidthClassName="min-w-[980px]">
-          <Table>
-            <TableElement>
+        <div className={showYearColumn ? undefined : "[&_th:nth-child(2)]:hidden [&_td:nth-child(2)]:hidden"}>
+          <TopScrollSync minWidthClassName="min-w-[980px]">
+            <Table>
+              <TableElement>
               <TableHead>
                 <tr>
                   <TableHeaderCell>Archivo</TableHeaderCell>
@@ -648,17 +795,17 @@ function ImportHistoryCard({
                   <TableHeaderCell>Fecha</TableHeaderCell>
                   <TableHeaderCell>Estado</TableHeaderCell>
                   <TableHeaderCell>Filas</TableHeaderCell>
-                  <TableHeaderCell>Validas</TableHeaderCell>
+                  <TableHeaderCell>Válidas</TableHeaderCell>
                   <TableHeaderCell>Errores</TableHeaderCell>
                   <TableHeaderCell className="text-right">Acciones</TableHeaderCell>
                 </tr>
               </TableHead>
-              <TableBody>
+                <TableBody>
                 {imports.length ? (
                   imports.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.file_name}</TableCell>
-                      <TableCell>{item.anio}</TableCell>
+                      <TableCell>{showYearColumn ? item.anio ?? "-" : null}</TableCell>
                       <TableCell>
                         {item.uploaded_by_profile?.full_name ??
                           item.uploaded_by_profile?.email ??
@@ -677,7 +824,10 @@ function ImportHistoryCard({
                         <div className="flex justify-end gap-2">
                           {editBasePath ? (
                             <Link href={`${editBasePath}/${item.id}`}>
-                              <Button size="sm" variant="secondary">
+                              <Button
+                                size="sm"
+                                className="border border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100"
+                              >
                                 <PencilLine className="size-4" />
                                 Editar
                               </Button>
@@ -710,10 +860,11 @@ function ImportHistoryCard({
                     </td>
                   </tr>
                 )}
-              </TableBody>
-            </TableElement>
-          </Table>
-        </TopScrollSync>
+                </TableBody>
+              </TableElement>
+            </Table>
+          </TopScrollSync>
+        </div>
       </CardContent>
     </Card>
   );
@@ -746,22 +897,23 @@ export function ImportsPageView({
         <ImportUploadCard
           title="Subir Excel de AX"
           eyebrow="Cargas AX"
-          description="Carga comercial principal. El archivo se parsea por posición, se conserva tal como llega y queda disponible para edición y dashboards comerciales."
+          description="Carga comercial principal. El archivo se procesa por posición, se conserva tal como llega y queda disponible para edición y dashboards comerciales."
           templateHref="/api/imports/template"
           uploadEndpoint="/api/imports"
           templateLabel="Descargar plantilla AX"
-          successMessage="Importacion AX procesada correctamente."
+          successMessage="Importación AX procesada correctamente."
           consoleLabel="[imports] Excel AX cargado"
           accentClassName="bg-[linear-gradient(90deg,#0b1f33_0%,#1f5c8c_100%)]"
+          showImportYear={false}
         />
         <ImportUploadCard
           title="Subir Excel de contabilidad"
           eyebrow="Cargas contables"
-          description="Carga financiera paralela. Lee las columnas Línea, Año anterior real, Año actual ppto, Año actual real y MB desde la fila 2, y las guarda tal cual en JSON."
+          description="Carga financiera paralela. Lee las columnas Línea, Año anterior real, Año actual presupuesto, Año actual real y MB desde la fila 2, y las guarda tal cual en JSON."
           templateHref="/api/accounting-imports/template"
           uploadEndpoint="/api/accounting-imports"
           templateLabel="Descargar plantilla contable"
-          successMessage="Importacion contable procesada correctamente."
+          successMessage="Importación contable procesada correctamente."
           consoleLabel="[accounting-imports] Excel cargado"
           accentClassName="bg-[linear-gradient(90deg,#17456d_0%,#2d7f73_100%)]"
           businessOptions={ACCOUNTING_BUSINESS_OPTIONS}
@@ -776,11 +928,13 @@ export function ImportsPageView({
           deleteEndpointBase="/api/imports"
           editBasePath="/dashboard/imports"
           emptyLabel="No hay importaciones AX registradas todavía."
+          showYearColumn={false}
         />
         <ImportHistoryCard
           title="Historial reciente contabilidad"
           imports={accountingImports}
           deleteEndpointBase="/api/accounting-imports"
+          editBasePath="/dashboard/imports/contabilidad"
           emptyLabel="No hay importaciones contables registradas todavía."
         />
       </div>

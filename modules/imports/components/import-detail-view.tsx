@@ -18,7 +18,8 @@ function toInputDate(value: string | null) {
 
 function normalizeNumberInput(value: string) {
   if (!value.trim()) return null;
-  const number = Number(value);
+  const normalized = value.replace(/\s/g, "").replace(/,/g, "").replace(/%/g, "");
+  const number = Number(normalized);
   return Number.isFinite(number) ? number : null;
 }
 
@@ -50,9 +51,12 @@ type EditableRowState = {
   oc: string;
   cliente_nombre: string;
   cliente_ruc: string;
+  sector_ax_nombre: string;
   sector_nombre: string;
   negocio_nombre: string;
   linea_nombre: string;
+  sublinea_nombre: string;
+  grupo_nombre: string;
   ejecutivo_nombre: string;
   proyecto: string;
   codigo_articulo: string;
@@ -65,6 +69,9 @@ type EditableRowState = {
   cantidad: string;
   ventas_monto: string;
   proyeccion_monto: string;
+  costo_monto: string;
+  margen_monto: string;
+  porcentaje_num: string;
   probabilidad_num: string;
   observaciones: string;
 };
@@ -84,9 +91,12 @@ function buildEditableRow(row: ImportFactRow): EditableRowState {
     oc: row.oc ?? "",
     cliente_nombre: row.cliente_nombre ?? "",
     cliente_ruc: row.cliente_ruc ?? "",
+    sector_ax_nombre: row.sector_ax_nombre ?? "",
     sector_nombre: row.sector_nombre ?? "",
     negocio_nombre: row.negocio_nombre ?? "",
     linea_nombre: row.linea_nombre ?? "",
+    sublinea_nombre: row.sublinea_nombre ?? "",
+    grupo_nombre: row.grupo_nombre ?? "",
     ejecutivo_nombre: row.ejecutivo_nombre ?? "",
     proyecto: row.proyecto ?? "",
     codigo_articulo: row.codigo_articulo ?? "",
@@ -99,6 +109,9 @@ function buildEditableRow(row: ImportFactRow): EditableRowState {
     cantidad: row.cantidad?.toString() ?? "",
     ventas_monto: row.ventas_monto?.toString() ?? "",
     proyeccion_monto: row.proyeccion_monto?.toString() ?? "",
+    costo_monto: row.costo_monto?.toString() ?? "",
+    margen_monto: row.margen_monto?.toString() ?? "",
+    porcentaje_num: row.porcentaje_num?.toString() ?? "",
     probabilidad_num:
       row.probabilidad_num === null || row.probabilidad_num === undefined
         ? ""
@@ -134,7 +147,9 @@ export function ImportDetailView({
   const [isDeletingImport, startDeletingImport] = useTransition();
   const [savingRowId, setSavingRowId] = useState<number | null>(null);
   const [deletingRowId, setDeletingRowId] = useState<number | null>(null);
-  const [importYear, setImportYear] = useState(String(importRecord.anio));
+  const [importYear, setImportYear] = useState(
+    importRecord.anio === null ? "" : String(importRecord.anio),
+  );
   const [editableRows, setEditableRows] = useState<Record<number, EditableRowState>>(
     () => Object.fromEntries(rows.map((row) => [row.id, buildEditableRow(row)])),
   );
@@ -231,9 +246,12 @@ export function ImportDetailView({
           oc: current.oc || null,
           cliente_nombre: current.cliente_nombre || null,
           cliente_ruc: current.cliente_ruc || null,
+          sector_ax_nombre: current.sector_ax_nombre || null,
           sector_nombre: current.sector_nombre || null,
           negocio_nombre: current.negocio_nombre || null,
           linea_nombre: current.linea_nombre || null,
+          sublinea_nombre: current.sublinea_nombre || null,
+          grupo_nombre: current.grupo_nombre || null,
           ejecutivo_nombre: current.ejecutivo_nombre || null,
           proyecto: current.proyecto || null,
           codigo_articulo: current.codigo_articulo || null,
@@ -246,6 +264,9 @@ export function ImportDetailView({
           cantidad: normalizeNumberInput(current.cantidad),
           ventas_monto: normalizeNumberInput(current.ventas_monto),
           proyeccion_monto: normalizeNumberInput(current.proyeccion_monto),
+          costo_monto: normalizeNumberInput(current.costo_monto),
+          margen_monto: normalizeNumberInput(current.margen_monto),
+          porcentaje_num: normalizeNumberInput(current.porcentaje_num),
           probabilidad_num: normalizeNumberInput(current.probabilidad_num),
           observaciones: current.observaciones || null,
         }),
@@ -310,10 +331,11 @@ export function ImportDetailView({
               Edita todos los campos normalizados de esta carga y guarda cada fila cuando esté lista.
             </p>
           </div>
-          <div className="flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur sm:flex-row sm:items-end">
+          <div className="w-full max-w-xl rounded-[28px] border border-white/15 bg-white/10 p-4 backdrop-blur">
+            <div className="flex flex-col gap-4">
             <Field label="Año del lote">
               <Input
-                className="w-32 border-white/10 bg-white/90 text-slate-900"
+                className="h-11 w-full border-white/10 bg-white/92 text-slate-900 shadow-sm sm:w-36"
                 type="number"
                 min={2020}
                 max={2100}
@@ -321,8 +343,9 @@ export function ImportDetailView({
                 onChange={(event) => setImportYear(event.target.value)}
               />
             </Field>
+              <div className="flex flex-col gap-3 sm:flex-row">
             <Button
-              className="bg-white text-slate-900 hover:bg-white/90"
+              className="h-11 flex-1 rounded-2xl bg-white text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:bg-white/92 hover:shadow-[0_14px_30px_rgba(15,23,42,0.24)]"
               onClick={handleSaveImport}
               disabled={isSavingImport}
             >
@@ -331,10 +354,11 @@ export function ImportDetailView({
               ) : (
                 <Save className="size-4" />
               )}
-              Guardar
+              Guardar lote
             </Button>
             <Button
               variant="destructive"
+              className="h-11 rounded-2xl border border-white/10 bg-rose-500/90 px-5 text-white shadow-sm transition hover:bg-rose-500 sm:min-w-32"
               onClick={handleDeleteImport}
               disabled={isDeletingImport}
             >
@@ -343,8 +367,10 @@ export function ImportDetailView({
               ) : (
                 <Trash2 className="size-4" />
               )}
-              Borrar
+              Borrar lote
             </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -451,12 +477,21 @@ export function ImportDetailView({
                   <Field label="Sector">
                     <Input value={editable.sector_nombre} onChange={(e) => patchEditableRow(row.id, { sector_nombre: e.target.value })} />
                   </Field>
+                  <Field label="Sector AX">
+                    <Input value={editable.sector_ax_nombre} onChange={(e) => patchEditableRow(row.id, { sector_ax_nombre: e.target.value })} />
+                  </Field>
                   <Field label="Negocio">
                     <Input value={editable.negocio_nombre} onChange={(e) => patchEditableRow(row.id, { negocio_nombre: e.target.value })} />
                   </Field>
 
                   <Field label="Línea">
                     <Input value={editable.linea_nombre} onChange={(e) => patchEditableRow(row.id, { linea_nombre: e.target.value })} />
+                  </Field>
+                  <Field label="SubLÃ­nea">
+                    <Input value={editable.sublinea_nombre} onChange={(e) => patchEditableRow(row.id, { sublinea_nombre: e.target.value })} />
+                  </Field>
+                  <Field label="Grupo">
+                    <Input value={editable.grupo_nombre} onChange={(e) => patchEditableRow(row.id, { grupo_nombre: e.target.value })} />
                   </Field>
                   <Field label="Ejecutivo">
                     <Input value={editable.ejecutivo_nombre} onChange={(e) => patchEditableRow(row.id, { ejecutivo_nombre: e.target.value })} />
@@ -489,6 +524,15 @@ export function ImportDetailView({
                   </Field>
                   <Field label="Proyección">
                     <Input value={editable.proyeccion_monto} onChange={(e) => patchEditableRow(row.id, { proyeccion_monto: e.target.value })} />
+                  </Field>
+                  <Field label="Costo">
+                    <Input value={editable.costo_monto} onChange={(e) => patchEditableRow(row.id, { costo_monto: e.target.value })} />
+                  </Field>
+                  <Field label="Margen">
+                    <Input value={editable.margen_monto} onChange={(e) => patchEditableRow(row.id, { margen_monto: e.target.value })} />
+                  </Field>
+                  <Field label="Porcentaje">
+                    <Input value={editable.porcentaje_num} onChange={(e) => patchEditableRow(row.id, { porcentaje_num: e.target.value })} />
                   </Field>
                   <Field label="Probabilidad %">
                     <Input value={editable.probabilidad_num} onChange={(e) => patchEditableRow(row.id, { probabilidad_num: e.target.value })} />

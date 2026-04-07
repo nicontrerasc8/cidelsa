@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { importYearSchema } from "@/lib/validators/imports";
 import {
   canAccessImports,
   createImportFromUpload,
@@ -24,7 +23,6 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get("file");
-    const importYearRaw = formData.get("anio");
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -33,8 +31,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const importYear = importYearSchema.parse(importYearRaw);
-    const result = await createImportFromUpload(file, currentUser, importYear);
+    const result = await createImportFromUpload(file, currentUser);
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

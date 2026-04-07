@@ -36,9 +36,12 @@ export const updateFactRowSchema = z.object({
   oc: z.string().trim().max(200).nullable(),
   cliente_nombre: z.string().trim().max(300).nullable(),
   cliente_ruc: z.string().trim().max(32).nullable(),
+  sector_ax_nombre: z.string().trim().max(200).nullable(),
   sector_nombre: z.string().trim().max(200).nullable(),
   negocio_nombre: z.string().trim().max(200).nullable(),
   linea_nombre: z.string().trim().max(200).nullable(),
+  sublinea_nombre: z.string().trim().max(200).nullable(),
+  grupo_nombre: z.string().trim().max(200).nullable(),
   ejecutivo_nombre: z.string().trim().max(200).nullable(),
   proyecto: z.string().trim().max(300).nullable(),
   codigo_articulo: z.string().trim().max(200).nullable(),
@@ -51,8 +54,23 @@ export const updateFactRowSchema = z.object({
   cantidad: z.coerce.number().nullable(),
   ventas_monto: z.coerce.number().nullable(),
   proyeccion_monto: z.coerce.number().nullable(),
+  costo_monto: z.coerce.number().nullable(),
+  margen_monto: z.coerce.number().nullable(),
+  porcentaje_num: z.coerce.number().nullable(),
   probabilidad_num: z.coerce.number().min(0).max(100).nullable(),
   observaciones: z.string().trim().max(4000).nullable(),
+});
+
+export const updateAccountingRowSchema = z.object({
+  linea: z.string().trim().max(300).nullable(),
+  anio_anterior_real: z.coerce.number().nullable(),
+  anio_actual_ppto: z.coerce.number().nullable(),
+  anio_actual_real: z.coerce.number().nullable(),
+  mb: z.coerce.number().nullable(),
+  negocio: z.string().trim().max(200).nullable(),
+  periodo_desde: z.string().trim().max(50).nullable(),
+  periodo_hasta: z.string().trim().max(50).nullable(),
+  periodo: z.string().trim().max(120).nullable(),
 });
 
 export function validateImportFile(file: File) {

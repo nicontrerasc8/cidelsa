@@ -34,9 +34,12 @@ export async function PATCH(
       oc?: string | null;
       cliente_nombre?: string | null;
       cliente_ruc?: string | null;
+      sector_ax_nombre?: string | null;
       sector_nombre?: string | null;
       negocio_nombre?: string | null;
       linea_nombre?: string | null;
+      sublinea_nombre?: string | null;
+      grupo_nombre?: string | null;
       ejecutivo_nombre?: string | null;
       proyecto?: string | null;
       codigo_articulo?: string | null;
@@ -49,6 +52,9 @@ export async function PATCH(
       cantidad?: number | null;
       ventas_monto?: number | null;
       proyeccion_monto?: number | null;
+      costo_monto?: number | null;
+      margen_monto?: number | null;
+      porcentaje_num?: number | null;
       probabilidad_num?: number | null;
       observaciones?: string | null;
     };
@@ -67,9 +73,12 @@ export async function PATCH(
       oc: body.oc ?? null,
       cliente_nombre: body.cliente_nombre ?? null,
       cliente_ruc: body.cliente_ruc ?? null,
+      sector_ax_nombre: body.sector_ax_nombre ?? null,
       sector_nombre: body.sector_nombre ?? null,
       negocio_nombre: body.negocio_nombre ?? null,
       linea_nombre: body.linea_nombre ?? null,
+      sublinea_nombre: body.sublinea_nombre ?? null,
+      grupo_nombre: body.grupo_nombre ?? null,
       ejecutivo_nombre: body.ejecutivo_nombre ?? null,
       proyecto: body.proyecto ?? null,
       codigo_articulo: body.codigo_articulo ?? null,
@@ -82,6 +91,9 @@ export async function PATCH(
       cantidad: body.cantidad ?? null,
       ventas_monto: body.ventas_monto ?? null,
       proyeccion_monto: body.proyeccion_monto ?? null,
+      costo_monto: body.costo_monto ?? null,
+      margen_monto: body.margen_monto ?? null,
+      porcentaje_num: body.porcentaje_num ?? null,
       probabilidad_num: body.probabilidad_num ?? null,
       observaciones: body.observaciones ?? null,
     });

@@ -22,7 +22,7 @@ export default async function LoginPage() {
         {/* Header del Login */}
         <div className="mb-8 text-center sm:text-left">
           <div className="inline-flex items-center rounded-full border border-primary/10 bg-primary/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">
-            Cidelsa v3.0
+            Cidelsa 
           </div>
           <h1 className="mt-6 text-4xl font-bold tracking-tight text-foreground">
             Bienvenido

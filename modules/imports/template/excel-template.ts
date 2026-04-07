@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 
 const templateHeaders = [
+  "Año",
   "Situación",
   "Mes",
   "Semana",
@@ -10,11 +11,14 @@ const templateHeaders = [
   "Factura",
   "Fecha Facturación",
   "OC",
+  "Sector AX",
   "Sector",
   "RUC",
   "Cliente",
   "Negocio",
   "Línea",
+  "SubLínea",
+  "Grupo",
   "Nombre de Proyecto",
   "Código",
   "Artículo",
@@ -31,6 +35,9 @@ const templateHeaders = [
   "Probabilidad",
   "Ventas S/",
   "Proyección",
+  "Costo",
+  "Margen",
+  "Porcentaje",
   "Ejecutivo de Ventas",
   "Observaciones",
 ] as const;
@@ -43,8 +50,9 @@ export async function buildImportsTemplateWorkbook() {
   const dataSheet = workbook.addWorksheet("Plantilla AX");
   dataSheet.addRow(templateHeaders);
   dataSheet.addRow([
+    2026,
     "Backlog",
-    1,
+    "Marzo",
     3,
     "OV-100245",
     "2026-01-15",
@@ -52,11 +60,14 @@ export async function buildImportsTemplateWorkbook() {
     "FAC-7788",
     "2026-01-29",
     "OC-88901",
+    "Industrial AX",
     "Industrial",
     "20601234567",
     "Cliente Demo SAC",
     "Energia",
     "Tableros",
+    "Potencia",
+    "Media tension",
     "Ampliacion subestacion",
     "TAB-220",
     "Tablero de distribucion 220V",
@@ -70,9 +81,12 @@ export async function buildImportsTemplateWorkbook() {
     "Proy",
     "Pipeline activo",
     "Si",
-    75,
-    168000,
-    180000,
+    "75%",
+    "168,000",
+    "180,000",
+    "120,000",
+    "60,000",
+    "35.71",
     "Ana Perez",
     "Fila de referencia para validar encabezados y tipos.",
   ]);
@@ -97,22 +111,22 @@ export async function buildImportsTemplateWorkbook() {
 
   const guideSheet = workbook.addWorksheet("Guia");
   guideSheet.columns = [
-    { header: "Campo", key: "field", width: 24 },
-    { header: "Uso", key: "usage", width: 64 },
+    { header: "Campo", key: "field", width: 28 },
+    { header: "Uso", key: "usage", width: 84 },
   ];
   guideSheet.getRow(1).font = { bold: true };
   guideSheet.addRows([
     ["Fecha registro / adjudicacion / facturacion", "Usa formato ISO `YYYY-MM-DD` o una fecha Excel valida."],
-    ["Mes / Semana", "Si vienen informados y son validos, se respetan. Si no, se derivan de la fecha base."],
-    ["Cliente", "Obligatorio. Si viene vacio, la fila se marca con error."],
+    ["Año", "Se guarda por fila cuando venga informado. El año del lote se sigue eligiendo en la interfaz."],
+    ["Mes / Semana", "Mes acepta numeros `1-12` o nombres como `Marzo`. Semana acepta enteros."],
+    ["Cliente", "Puede venir vacio. La fila igual se conserva en el JSON y queda disponible para edicion."],
     ["RUC", "Se guarda junto al cliente cuando venga informado."],
-    ["Probabilidad", "Acepta `0-1` o `0-100`. El sistema recalcula `forecast_ponderado`."],
-    ["Ventas S/", "Monto principal de la oportunidad o facturacion."],
-    ["Proyeccion", "Si se deja vacio, se usa el valor de ventas."],
+    ["Probabilidad", "Acepta `0-1`, `0-100` o texto como `75%`. El sistema recalcula `forecast_ponderado`."],
+    ["Ventas S/ / Proyección / Costo / Margen / Porcentaje", "Aceptan numeros directos o texto con separadores como `60,000` o `100%`."],
     ["BL / Proy", "Se usa como tipo de pipeline. Si no viene, se toma la columna `Pipeline`."],
-    ["Licitaciones", "Acepta `Si`, `Yes`, `True`, `1` o `X`."],
-    ["Dimension1 / Dimension2 / Dimension 3", "Por ahora quedan preservadas en `raw_ax_rows` y no se normalizan en `fact_comercial`."],
-    ["Anio de carga", "Se elige en la interfaz al subir el archivo y queda guardado en la tabla `imports`."],
+    ["Licitaciones", "Acepta `Si`, `Yes`, `True`, `1`, `X`, `No` o `0`."],
+    ["Sector AX / SubLínea / Grupo / Dimension1 / Dimension2 / Dimension 3", "Se preservan en el JSON y tambien quedan normalizados para la vista de detalle."],
+    ["Año de carga", "Se elige en la interfaz al subir el archivo y queda guardado en la tabla `imports`."],
   ]);
 
   return workbook.xlsx.writeBuffer();

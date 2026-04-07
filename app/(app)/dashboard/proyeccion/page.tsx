@@ -17,13 +17,14 @@ export default async function ProjectionPage() {
   return (
     <BacklogMatrixDashboard
       summary={summary}
-      eyebrow="Dashboard proyeccion"
-      title="Proyección por linea y mes"
-      description="Se consideran solo filas donde `BL / Proy` llega como `Proyección`. El cuadro muestra ventas distribuidas por linea y mes, con filtro por negocio."
+      eyebrow="Dashboard proyección"
+      title="Proyección por línea y mes"
+      description=""
       cardTitle="Matriz de proyección"
       totalLabel="Proyección total"
       emptyLabel="No hay proyección para el negocio seleccionado."
       totalVisibleLabel="Total proyección visible:"
+      showSituacionBreakdown={false}
     />
   );
 }

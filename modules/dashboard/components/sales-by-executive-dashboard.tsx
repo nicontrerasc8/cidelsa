@@ -6,13 +6,14 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ResponsiveContainer,
+  Legend,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { Filter, UserRound, UsersRound } from "lucide-react";
 
+import { ChartContainer } from "@/components/charts/chart-container";
 import { KpiCard } from "@/components/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -42,10 +43,13 @@ const CHART_COLORS = [
   "#d0eefb",
   "#e5f6fd",
 ] as const;
+const CHART_TICK_STYLE = { fill: "#ffffff", fontSize: 13 } as const;
+const CHART_AXIS_STYLE = { stroke: "rgba(255, 255, 255, 0.28)" } as const;
 
 type ExecutiveLineAggregate = {
   ejecutivo: string;
   linea: string | null;
+  label: string;
   ventasMonto: number;
 };
 
@@ -56,6 +60,10 @@ type ExecutiveSummaryCard = {
   bestLineaVentas: number;
   operaciones: number;
 };
+
+type MonthlyComparisonRow = {
+  month: string;
+} & Record<string, string | number>;
 
 function FilterSelect({
   label,
@@ -74,7 +82,7 @@ function FilterSelect({
     <div className="space-y-2">
       <Label>{label}</Label>
       <select
-        className="flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
@@ -100,11 +108,13 @@ export function SalesByExecutiveDashboard({
   const [selectedNegocio, setSelectedNegocio] = useState<string>(ALL_VALUE);
   const [selectedLinea, setSelectedLinea] = useState<string>(ALL_VALUE);
   const [selectedEjecutivo, setSelectedEjecutivo] = useState<string>(ALL_VALUE);
+  const [selectedMonthlyYear, setSelectedMonthlyYear] = useState<string>(ALL_VALUE);
 
   const availableLineas = useMemo(() => {
     if (selectedNegocio === ALL_VALUE) return [];
 
     const lineas = new Set<string>();
+
     for (const row of summary.rows) {
       if (row.negocio === selectedNegocio && row.linea) {
         lineas.add(row.linea);
@@ -114,23 +124,31 @@ export function SalesByExecutiveDashboard({
     return [...lineas].sort((a, b) => a.localeCompare(b));
   }, [selectedNegocio, summary.rows]);
 
-  const filteredRows = useMemo(() => {
+  const rowsMatchingBaseFilters = useMemo(() => {
     return summary.rows.filter((row) => {
       if (selectedYear !== ALL_VALUE && row.importYear !== Number(selectedYear)) return false;
       if (selectedMonth !== ALL_VALUE && row.monthIndex !== Number(selectedMonth)) return false;
       if (selectedNegocio !== ALL_VALUE && row.negocio !== selectedNegocio) return false;
       if (selectedLinea !== ALL_VALUE && row.linea !== selectedLinea) return false;
+      return true;
+    });
+  }, [selectedLinea, selectedMonth, selectedNegocio, selectedYear, summary.rows]);
+
+  const filteredRows = useMemo(() => {
+    return rowsMatchingBaseFilters.filter((row) => {
       if (selectedEjecutivo !== ALL_VALUE && row.ejecutivo !== selectedEjecutivo) return false;
       return true;
     });
-  }, [
-    selectedEjecutivo,
-    selectedLinea,
-    selectedMonth,
-    selectedNegocio,
-    selectedYear,
-    summary.rows,
-  ]);
+  }, [rowsMatchingBaseFilters, selectedEjecutivo]);
+
+  const rowsForMonthlyComparison = useMemo(() => {
+    return summary.rows.filter((row) => {
+      if (selectedNegocio !== ALL_VALUE && row.negocio !== selectedNegocio) return false;
+      if (selectedLinea !== ALL_VALUE && row.linea !== selectedLinea) return false;
+      if (selectedEjecutivo !== ALL_VALUE && row.ejecutivo !== selectedEjecutivo) return false;
+      return true;
+    });
+  }, [selectedEjecutivo, selectedLinea, selectedNegocio, summary.rows]);
 
   const executiveCards = useMemo(() => {
     const executiveMap = new Map<
@@ -150,7 +168,7 @@ export function SalesByExecutiveDashboard({
       current.totalVentas += row.ventasMonto;
       current.operaciones += 1;
 
-      const linea = row.linea ?? "Sin linea";
+      const linea = row.linea ?? "Sin línea";
       current.lineas.set(linea, (current.lineas.get(linea) ?? 0) + row.ventasMonto);
       executiveMap.set(row.ejecutivo, current);
     }
@@ -158,7 +176,7 @@ export function SalesByExecutiveDashboard({
     return [...executiveMap.entries()]
       .map(([ejecutivo, value]) => {
         const bestLineaEntry =
-          [...value.lineas.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["Sin linea", 0];
+          [...value.lineas.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["Sin línea", 0];
 
         return {
           ejecutivo,
@@ -175,7 +193,7 @@ export function SalesByExecutiveDashboard({
     const pairMap = new Map<string, ExecutiveLineAggregate>();
 
     for (const row of filteredRows) {
-      const linea = row.linea ?? "Sin linea";
+      const linea = row.linea ?? "Sin línea";
       const key = `${row.ejecutivo}__${linea}`;
       const current = pairMap.get(key);
 
@@ -187,6 +205,7 @@ export function SalesByExecutiveDashboard({
       pairMap.set(key, {
         ejecutivo: row.ejecutivo,
         linea,
+        label: `${row.ejecutivo} | ${linea}`,
         ventasMonto: row.ventasMonto,
       });
     }
@@ -201,22 +220,53 @@ export function SalesByExecutiveDashboard({
 
   const activeExecutiveRows = useMemo(() => {
     if (!activeExecutive) return [];
-    return filteredRows.filter((row) => row.ejecutivo === activeExecutive);
-  }, [activeExecutive, filteredRows]);
+    return rowsForMonthlyComparison.filter((row) => row.ejecutivo === activeExecutive);
+  }, [activeExecutive, rowsForMonthlyComparison]);
 
-  const monthlyComparison = useMemo(() => {
-    const monthValues = new Array<number>(12).fill(0);
+  const monthlyComparisonYears = useMemo(() => {
+    const years = new Set<number>();
 
     for (const row of activeExecutiveRows) {
-      if (row.monthIndex === null) continue;
-      monthValues[row.monthIndex] += row.ventasMonto;
+      if (row.importYear === null) continue;
+      years.add(row.importYear);
     }
 
-    return EXECUTIVE_MONTH_LABELS.map((month, index) => ({
-      month,
-      ventasMonto: monthValues[index],
-    }));
+    return [...years].sort((a, b) => a - b);
   }, [activeExecutiveRows]);
+
+  const visibleMonthlyYears = useMemo(() => {
+    if (
+      selectedMonthlyYear !== ALL_VALUE &&
+      monthlyComparisonYears.includes(Number(selectedMonthlyYear))
+    ) {
+      return [Number(selectedMonthlyYear)];
+    }
+    return monthlyComparisonYears;
+  }, [monthlyComparisonYears, selectedMonthlyYear]);
+
+  const monthlyComparison = useMemo(() => {
+    const monthYearValues = new Map<number, number[]>();
+
+    for (const year of visibleMonthlyYears) {
+      monthYearValues.set(year, new Array<number>(12).fill(0));
+    }
+
+    for (const row of activeExecutiveRows) {
+      if (row.monthIndex === null || row.importYear === null) continue;
+      if (!monthYearValues.has(row.importYear)) continue;
+      monthYearValues.get(row.importYear)![row.monthIndex] += row.ventasMonto;
+    }
+
+    return EXECUTIVE_MONTH_LABELS.map((month, index) => {
+      const values: MonthlyComparisonRow = { month };
+
+      for (const year of visibleMonthlyYears) {
+        values[String(year)] = monthYearValues.get(year)?.[index] ?? 0;
+      }
+
+      return values;
+    });
+  }, [activeExecutiveRows, visibleMonthlyYears]);
 
   const executiveYearComparison = useMemo(() => {
     const years =
@@ -233,6 +283,8 @@ export function SalesByExecutiveDashboard({
     >();
 
     for (const row of filteredRows) {
+      if (row.importYear === null) continue;
+
       const current =
         executiveMap.get(row.ejecutivo) ??
         {
@@ -296,7 +348,7 @@ export function SalesByExecutiveDashboard({
 
   const lineaOptions = useMemo(
     () => [
-      { label: "Todas las lineas", value: ALL_VALUE },
+      { label: "Todas las líneas", value: ALL_VALUE },
       ...availableLineas.map((linea) => ({ label: linea, value: linea })),
     ],
     [availableLineas],
@@ -304,11 +356,13 @@ export function SalesByExecutiveDashboard({
 
   const availableExecutives = useMemo(() => {
     const executives = new Set<string>();
-    for (const row of filteredRows) {
+
+    for (const row of rowsMatchingBaseFilters) {
       executives.add(row.ejecutivo);
     }
+
     return [...executives].sort((a, b) => a.localeCompare(b));
-  }, [filteredRows]);
+  }, [rowsMatchingBaseFilters]);
 
   const ejecutivoOptions = useMemo(
     () => [
@@ -316,6 +370,14 @@ export function SalesByExecutiveDashboard({
       ...availableExecutives.map((ejecutivo) => ({ label: ejecutivo, value: ejecutivo })),
     ],
     [availableExecutives],
+  );
+
+  const monthlyYearOptions = useMemo(
+    () => [
+      { label: "Todos los años", value: ALL_VALUE },
+      ...monthlyComparisonYears.map((year) => ({ label: String(year), value: String(year) })),
+    ],
+    [monthlyComparisonYears],
   );
 
   return (
@@ -330,14 +392,25 @@ export function SalesByExecutiveDashboard({
               Ventas por ejecutivo
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/80">
-              Analiza qué ejecutivos venden más, en qué línea concentran sus ventas
-              y cómo evolucionan con filtros consistentes.
+              Analiza qué ejecutivos venden más, en qué línea concentran sus
+              ventas y cómo evolucionan usando el año que viene en cada fila del
+              JSON AX.
             </p>
           </div>
 
           <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-white/10 p-4 backdrop-blur md:grid-cols-2 xl:grid-cols-5">
-            <FilterSelect label="Año" value={selectedYear} options={yearOptions} onChange={setSelectedYear} />
-            <FilterSelect label="Mes" value={selectedMonth} options={monthOptions} onChange={setSelectedMonth} />
+            <FilterSelect
+              label="Año"
+              value={selectedYear}
+              options={yearOptions}
+              onChange={setSelectedYear}
+            />
+            <FilterSelect
+              label="Mes"
+              value={selectedMonth}
+              options={monthOptions}
+              onChange={setSelectedMonth}
+            />
             <FilterSelect
               label="Negocio"
               value={selectedNegocio}
@@ -348,7 +421,7 @@ export function SalesByExecutiveDashboard({
               }}
             />
             <FilterSelect
-              label="Linea"
+              label="Línea"
               value={selectedLinea}
               options={lineaOptions}
               onChange={setSelectedLinea}
@@ -366,8 +439,20 @@ export function SalesByExecutiveDashboard({
 
       <section className="grid gap-4 lg:grid-cols-3">
         <KpiCard title="Ventas filtradas" value={totalVentas} icon={UsersRound} tone="primary" />
-        <KpiCard title="Ejecutivos visibles" value={executiveCards.length} icon={UserRound} tone="success" format="number" />
-        <KpiCard title="Registros considerados" value={filteredRows.length} icon={Filter} tone="warning" format="number" />
+        <KpiCard
+          title="Ejecutivos visibles"
+          value={executiveCards.length}
+          icon={UserRound}
+          tone="success"
+          format="number"
+        />
+        <KpiCard
+          title="Registros considerados"
+          value={filteredRows.length}
+          icon={Filter}
+          tone="warning"
+          format="number"
+        />
       </section>
 
       <div className="flex flex-wrap gap-2">
@@ -404,28 +489,50 @@ export function SalesByExecutiveDashboard({
               </CardHeader>
               <CardContent className="h-[430px]">
                 {executiveLineRanking.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={executiveLineRanking} layout="vertical" margin={{ left: 24, right: 16 }}>
+                  <ChartContainer>
+                    <BarChart
+                      data={executiveLineRanking}
+                      layout="vertical"
+                      margin={{ left: 24, right: 16 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tickFormatter={(value) => formatCurrency(Number(value))} />
-                      <YAxis type="category" dataKey="ejecutivo" width={120} tick={{ fontSize: 12 }} />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(value) => formatCurrency(Number(value))}
+                        tick={CHART_TICK_STYLE}
+                        axisLine={CHART_AXIS_STYLE}
+                        tickLine={CHART_AXIS_STYLE}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        width={220}
+                        tick={CHART_TICK_STYLE}
+                        axisLine={CHART_AXIS_STYLE}
+                        tickLine={CHART_AXIS_STYLE}
+                      />
                       <Tooltip
                         formatter={(value) => formatCurrency(Number(value ?? 0))}
                         labelFormatter={(_, payload) => {
-                          const item = payload?.[0]?.payload as ExecutiveLineAggregate | undefined;
-                          return item ? `${item.ejecutivo} | ${item.linea ?? "Sin linea"}` : "";
+                          const item = payload?.[0]?.payload as
+                            | ExecutiveLineAggregate
+                            | undefined;
+                          return item ? `${item.ejecutivo} | ${item.linea ?? "Sin línea"}` : "";
                         }}
                       />
                       <Bar dataKey="ventasMonto" radius={[0, 10, 10, 0]}>
                         {executiveLineRanking.map((entry, index) => (
-                          <Cell key={`${entry.ejecutivo}-${entry.linea}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          <Cell
+                            key={`${entry.ejecutivo}-${entry.linea}`}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                          />
                         ))}
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
+                  </ChartContainer>
                 ) : (
                   <div className="flex h-full items-center justify-center rounded-3xl border border-dashed text-sm text-muted-foreground">
-                    No hay ventas de ejecutivos para los filtros seleccionados.
+                    No hay datos para los filtros seleccionados.
                   </div>
                 )}
               </CardContent>
@@ -433,23 +540,24 @@ export function SalesByExecutiveDashboard({
 
             <Card>
               <CardHeader>
-                <CardTitle>Top ejecutivos</CardTitle>
+                <CardTitle>Resumen por ejecutivo</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {executiveCards.slice(0, 5).map((row, index) => (
-                  <div key={row.ejecutivo} className="rounded-2xl border bg-muted/25 p-4">
+                {executiveCards.slice(0, 3).map((card) => (
+                  <div key={card.ejecutivo} className="rounded-2xl border bg-muted/25 p-4">
                     <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                      Puesto {index + 1}
+                      {card.ejecutivo}
                     </p>
-                    <p className="mt-2 text-base font-semibold">{row.ejecutivo}</p>
+                    <p className="mt-2 text-2xl font-semibold tracking-tight">
+                      {formatCurrency(card.totalVentas)}
+                    </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Línea líder: {row.bestLinea}
+                      Mejor línea:{" "}
+                      <span className="font-medium text-foreground">{card.bestLinea}</span>
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {formatCurrency(row.bestLineaVentas)} en {row.bestLinea}
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold tracking-tight">
-                      {formatCurrency(row.totalVentas)}
+                      {card.operaciones} registros | {formatCurrency(card.bestLineaVentas)} en su
+                      línea principal
                     </p>
                   </div>
                 ))}
@@ -464,7 +572,7 @@ export function SalesByExecutiveDashboard({
 
           <Card>
             <CardHeader>
-              <CardTitle>Detalle de ejecutivos y su línea más fuerte</CardTitle>
+              <CardTitle>Detalle por ejecutivo y línea</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
@@ -473,28 +581,29 @@ export function SalesByExecutiveDashboard({
                     <tr>
                       <TableHeaderCell>#</TableHeaderCell>
                       <TableHeaderCell>Ejecutivo</TableHeaderCell>
-                      <TableHeaderCell>Línea líder</TableHeaderCell>
-                      <TableHeaderCell className="text-right">Ventas línea líder</TableHeaderCell>
-                      <TableHeaderCell className="text-right">Ventas totales</TableHeaderCell>
-                      <TableHeaderCell className="text-right">Registros</TableHeaderCell>
+                      <TableHeaderCell>Línea</TableHeaderCell>
+                      <TableHeaderCell className="text-right">Ventas</TableHeaderCell>
                     </tr>
                   </TableHead>
                   <TableBody>
-                    {executiveCards.length ? (
-                      executiveCards.map((row, index) => (
-                        <TableRow key={row.ejecutivo}>
+                    {executiveLineRanking.length ? (
+                      executiveLineRanking.map((row, index) => (
+                        <TableRow key={`${row.ejecutivo}-${row.linea}-${index}`}>
                           <TableCell>{index + 1}</TableCell>
                           <TableCell className="font-medium">{row.ejecutivo}</TableCell>
-                          <TableCell>{row.bestLinea}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(row.bestLineaVentas)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(row.totalVentas)}</TableCell>
-                          <TableCell className="text-right">{row.operaciones}</TableCell>
+                          <TableCell>{row.linea ?? "Sin línea"}</TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(row.ventasMonto)}
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                          No hay ejecutivos para mostrar.
+                        <td
+                          colSpan={4}
+                          className="px-4 py-10 text-center text-sm text-muted-foreground"
+                        >
+                          No hay combinaciones de ejecutivo y línea para mostrar.
                         </td>
                       </tr>
                     )}
@@ -505,67 +614,65 @@ export function SalesByExecutiveDashboard({
           </Card>
         </>
       ) : (
-        <>
-          <section className="grid gap-6 xl:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Ventas anuales por ejecutivo</CardTitle>
-              </CardHeader>
-              <CardContent className="h-[360px]">
-                {executiveCards.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={executiveCards.slice(0, 10)}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="ejecutivo"
-                        tick={{ fontSize: 11 }}
-                        interval={0}
-                        angle={-15}
-                        textAnchor="end"
-                        height={60}
+        <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card>
+            <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <CardTitle>Evolución mensual del ejecutivo activo</CardTitle>
+              <div className="w-full lg:w-56">
+                <FilterSelect
+                  label="Año del comparativo"
+                  value={selectedMonthlyYear}
+                  options={monthlyYearOptions}
+                  onChange={setSelectedMonthlyYear}
+                  disabled={!monthlyComparisonYears.length}
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="h-[430px]">
+              {activeExecutive && activeExecutiveRows.length && visibleMonthlyYears.length ? (
+                <ChartContainer>
+                  <BarChart data={monthlyComparison} margin={{ left: 12, right: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      interval={0}
+                      angle={-15}
+                      textAnchor="end"
+                      height={72}
+                      tick={CHART_TICK_STYLE}
+                      axisLine={CHART_AXIS_STYLE}
+                      tickLine={CHART_AXIS_STYLE}
+                    />
+                    <YAxis
+                      tickFormatter={(value) => formatCurrency(Number(value))}
+                      tick={CHART_TICK_STYLE}
+                      axisLine={CHART_AXIS_STYLE}
+                      tickLine={CHART_AXIS_STYLE}
+                    />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
+                    <Legend />
+                    {visibleMonthlyYears.map((year, index) => (
+                      <Bar
+                        key={year}
+                        dataKey={String(year)}
+                        name={String(year)}
+                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                        radius={[10, 10, 0, 0]}
                       />
-                      <YAxis tickFormatter={(value) => formatCurrency(Number(value))} />
-                      <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
-                      <Bar dataKey="totalVentas" fill="#145b8a" radius={[10, 10, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center rounded-3xl border border-dashed text-sm text-muted-foreground">
-                    No hay ventas anuales para los filtros seleccionados.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Ventas mensuales del ejecutivo {activeExecutive ? activeExecutive : "seleccionado"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="h-[360px]">
-                {monthlyComparison.some((row) => row.ventasMonto > 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyComparison}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
-                      <YAxis tickFormatter={(value) => formatCurrency(Number(value))} />
-                      <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
-                      <Bar dataKey="ventasMonto" fill="#3298d6" radius={[10, 10, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center rounded-3xl border border-dashed text-sm text-muted-foreground">
-                    No hay comparativo mensual para el ejecutivo activo.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
+                    ))}
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-3xl border border-dashed text-sm text-muted-foreground">
+                  No hay suficiente data para comparar al ejecutivo seleccionado.
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Tabla anual de ejecutivos</CardTitle>
+              <CardTitle>Comparativo anual entre ejecutivos</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
@@ -586,12 +693,17 @@ export function SalesByExecutiveDashboard({
                       executiveYearComparison.table.map((row) => (
                         <TableRow key={row.ejecutivo}>
                           <TableCell className="font-medium">{row.ejecutivo}</TableCell>
-                          {row.years.map((yearItem) => (
-                            <TableCell key={`${row.ejecutivo}-${yearItem.year}`} className="text-right">
-                              {yearItem.ventasMonto ? formatCurrency(yearItem.ventasMonto) : "-"}
+                          {row.years.map((year) => (
+                            <TableCell
+                              key={`${row.ejecutivo}-${year.year}`}
+                              className="text-right"
+                            >
+                              {formatCurrency(year.ventasMonto)}
                             </TableCell>
                           ))}
-                          <TableCell className="text-right">{formatCurrency(row.totalVentas)}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {formatCurrency(row.totalVentas)}
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -600,7 +712,7 @@ export function SalesByExecutiveDashboard({
                           colSpan={executiveYearComparison.years.length + 2}
                           className="px-4 py-10 text-center text-sm text-muted-foreground"
                         >
-                          No hay tabla anual para mostrar con los filtros actuales.
+                          No hay comparativos anuales para mostrar con los filtros actuales.
                         </td>
                       </tr>
                     )}
@@ -609,7 +721,7 @@ export function SalesByExecutiveDashboard({
               </Table>
             </CardContent>
           </Card>
-        </>
+        </section>
       )}
     </div>
   );

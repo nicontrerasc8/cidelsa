@@ -18,12 +18,13 @@ export default async function SellerProjectionPage() {
     <BacklogMatrixDashboard
       summary={summary}
       eyebrow="Dashboard ejecutivo"
-      title="Mi proyeccion por linea y mes"
-      description="Proyeccion visible solo para las filas donde el campo Ejecutivo coincide con tu nombre."
-      cardTitle="Matriz de mi proyeccion"
-      totalLabel="Mi proyeccion total"
-      emptyLabel="No hay proyeccion visible para tu usuario."
-      totalVisibleLabel="Total proyeccion visible:"
+      title="Mi proyección por línea y mes"
+      description="Proyección visible solo para las filas donde el campo Ejecutivo coincide con tu nombre."
+      cardTitle="Matriz de mi proyección"
+      totalLabel="Mi proyección total"
+      emptyLabel="No hay proyección visible para tu usuario."
+      totalVisibleLabel="Total proyección visible:"
+      showSituacionBreakdown={false}
     />
   );
 }

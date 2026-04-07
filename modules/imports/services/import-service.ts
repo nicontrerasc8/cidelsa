@@ -10,7 +10,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AppRole, ImportFactRow, ImportRecord } from "@/lib/types/database";
 import {
   updateFactRowSchema,
-  updateImportSchema,
   validateImportFile,
 } from "@/lib/validators/imports";
 import { parseAxWorkbook } from "@/modules/imports/parser/excel";
@@ -45,6 +44,7 @@ export function canAccessImports(role: AppRole) {
 function normalizeImportRecord(row: RecentImportRow): ImportRecord {
   return {
     ...row,
+    anio: null,
     uploaded_by_profile: row.profiles?.[0] ?? null,
   };
 }
@@ -119,27 +119,36 @@ function normalizeJsonFactRow(importId: string, row: Record<string, unknown>): I
     cantidad: toNullableNumber(row.cantidad),
     ventas_monto: toNullableNumber(row.ventas_monto),
     proyeccion_monto: toNullableNumber(row.proyeccion_monto),
-    probabilidad_num: toNullableNumber(row.probabilidad_num),
+    probabilidad_num: normalizeProbability(toNullableNumber(row.probabilidad_num)),
     forecast_ponderado: toNullableNumber(row.forecast_ponderado),
     observaciones: toNullableString(row.observaciones),
     cliente_nombre: toNullableString(row.cliente_nombre),
     cliente_ruc: toNullableString(row.cliente_ruc),
+    sector_ax_nombre: toNullableString(row.sector_ax_nombre),
     sector_nombre: toNullableString(row.sector_nombre),
     negocio_nombre: toNullableString(row.negocio_nombre),
     linea_nombre: toNullableString(row.linea_nombre),
+    sublinea_nombre: toNullableString(row.sublinea_nombre),
+    grupo_nombre: toNullableString(row.grupo_nombre),
     ejecutivo_nombre: toNullableString(row.ejecutivo_nombre),
+    costo_monto: toNullableNumber(row.costo_monto),
+    margen_monto: toNullableNumber(row.margen_monto),
+    porcentaje_num: toNullableNumber(row.porcentaje_num),
   };
 }
 
 function mapPayloadToLegacyRow(importId: string, rowNumber: number, payload: Record<string, unknown>) {
+  const probability = normalizeProbability(toNullableNumber(payload.probabilidad_num));
+  const projection = toNullableNumber(payload.proyeccion_monto);
+
   return normalizeJsonFactRow(importId, {
     id: rowNumber,
     import_id: importId,
+    anio: typeof payload.anio === "number" ? payload.anio : null,
     situacion: payload.situacion,
     fecha_registro: payload.fecha_registro,
     fecha_adjudicacion: payload.fecha_adjudicacion,
     fecha_facturacion: payload.fecha_facturacion,
-    anio: null,
     mes: typeof payload.mes === "number" ? payload.mes : null,
     trimestre: null,
     semana: typeof payload.semana === "number" ? payload.semana : null,
@@ -157,15 +166,22 @@ function mapPayloadToLegacyRow(importId: string, rowNumber: number, payload: Rec
     cantidad: payload.cantidad,
     ventas_monto: payload.ventas_monto,
     proyeccion_monto: payload.proyeccion_monto,
-    probabilidad_num: payload.probabilidad_num,
-    forecast_ponderado: null,
+    probabilidad_num: probability,
+    forecast_ponderado:
+      probability !== null && projection !== null ? projection * probability : null,
     observaciones: payload.observaciones,
     cliente_nombre: payload.cliente,
     cliente_ruc: payload.ruc,
+    sector_ax_nombre: payload.sector_ax,
     sector_nombre: payload.sector,
     negocio_nombre: payload.negocio,
     linea_nombre: payload.linea,
+    sublinea_nombre: payload.sublinea,
+    grupo_nombre: payload.grupo,
     ejecutivo_nombre: payload.ejecutivo,
+    costo_monto: payload.costo_monto,
+    margen_monto: payload.margen_monto,
+    porcentaje_num: payload.porcentaje_num,
   });
 }
 
@@ -239,6 +255,41 @@ function buildPreviewRows(importId: string, data: ImportJsonPayload) {
   }));
 }
 
+function buildImportDebugRows(data: ImportJsonPayload, limit = 10) {
+  return data.rows.slice(0, limit).map((row) => ({
+    fila_excel: row.row_number,
+    parse_status: row.parse_status,
+    parse_errors: row.parse_errors,
+    payload: row.payload,
+  }));
+}
+
+function buildImportDebugSummary(data: ImportJsonPayload, limit = 10) {
+  return data.rows.slice(0, limit).map((row) => ({
+    fila_excel: row.row_number,
+    anio: row.payload.anio ?? null,
+    mes: row.payload.mes ?? null,
+    semana: row.payload.semana ?? null,
+    situacion: row.payload.situacion ?? null,
+    orden_venta: row.payload.orden_venta ?? null,
+    factura: row.payload.factura ?? null,
+    sector_ax: row.payload.sector_ax ?? null,
+    sector: row.payload.sector ?? null,
+    cliente: row.payload.cliente ?? null,
+    negocio: row.payload.negocio ?? null,
+    linea: row.payload.linea ?? null,
+    sublinea: row.payload.sublinea ?? null,
+    grupo: row.payload.grupo ?? null,
+    probabilidad_num: row.payload.probabilidad_num ?? null,
+    ventas_monto: row.payload.ventas_monto ?? null,
+    proyeccion_monto: row.payload.proyeccion_monto ?? null,
+    costo_monto: row.payload.costo_monto ?? null,
+    margen_monto: row.payload.margen_monto ?? null,
+    porcentaje_num: row.payload.porcentaje_num ?? null,
+    ejecutivo: row.payload.ejecutivo ?? null,
+  }));
+}
+
 async function getImportRowForEdit(importId: string) {
   const admin = createAdminSupabaseClient();
   const { data, error } = await admin
@@ -257,7 +308,6 @@ async function getImportRowForEdit(importId: string) {
 export async function createImportFromUpload(
   file: File,
   currentUser: CurrentUser,
-  importYear: number,
 ) {
   const admin = createAdminSupabaseClient();
   validateImportFile(file);
@@ -270,7 +320,6 @@ export async function createImportFromUpload(
   console.groupCollapsed("[imports][service] Resumen de importacion");
   console.log("archivo", file.name);
   console.log("usuario", currentUser.id);
-  console.log("anio_importacion", importYear);
   console.log("hoja", parsed.sheetName);
   console.log("columnas", parsed.columns);
   console.log("total_filas", parsed.parsedRows.length);
@@ -283,7 +332,7 @@ export async function createImportFromUpload(
     .insert({
       file_name: file.name,
       storage_path: storagePath,
-      anio: importYear,
+      anio: null,
       uploaded_by: currentUser.id,
       status: "processing",
       total_rows: parsed.parsedRows.length,
@@ -305,6 +354,8 @@ export async function createImportFromUpload(
 
   console.groupCollapsed("[imports][service] Payload final para JSON");
   console.log("muestra_filas_json", importData.rows.slice(0, 5));
+  console.log("primeras_10_filas_guardadas", buildImportDebugRows(importData, 10));
+  console.table(buildImportDebugSummary(importData, 10));
   console.groupEnd();
 
   const { error: updateError } = await admin
@@ -334,7 +385,7 @@ export async function createImportFromUpload(
   return {
     id: importId,
     fileName: file.name,
-    importYear,
+    importYear: null,
     sheetName: parsed.sheetName,
     columns: parsed.columns,
     previewRows: buildPreviewRows(importId, importData),
@@ -385,20 +436,13 @@ export async function getImportDetail(importId: string) {
   };
 }
 
-export async function updateImportMetadata(
-  importId: string,
-  input: { anio: number },
-) {
+export async function updateImportMetadata(importId: string) {
   await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
-
-  const parsed = updateImportSchema.parse({
-    anio: input.anio,
-  });
 
   const admin = createAdminSupabaseClient();
   const { error } = await admin
     .from("imports")
-    .update(parsed)
+    .update({ anio: null })
     .eq("id", importId);
 
   if (error) {
@@ -458,7 +502,7 @@ export async function deleteImportFactRow(importId: string, rowId: number) {
 export async function updateImportFactRow(
   importId: string,
   rowId: number,
-  input: {
+    input: {
     anio: number | null;
     mes: number | null;
     trimestre: number | null;
@@ -472,9 +516,12 @@ export async function updateImportFactRow(
     oc: string | null;
     cliente_nombre: string | null;
     cliente_ruc: string | null;
+    sector_ax_nombre: string | null;
     sector_nombre: string | null;
     negocio_nombre: string | null;
     linea_nombre: string | null;
+    sublinea_nombre: string | null;
+    grupo_nombre: string | null;
     ejecutivo_nombre: string | null;
     proyecto: string | null;
     codigo_articulo: string | null;
@@ -487,6 +534,9 @@ export async function updateImportFactRow(
     cantidad: number | null;
     ventas_monto: number | null;
     proyeccion_monto: number | null;
+    costo_monto: number | null;
+    margen_monto: number | null;
+    porcentaje_num: number | null;
     probabilidad_num: number | null;
     observaciones: string | null;
   },
@@ -507,9 +557,12 @@ export async function updateImportFactRow(
     oc: normalizeOptionalText(input.oc),
     cliente_nombre: normalizeOptionalText(input.cliente_nombre),
     cliente_ruc: normalizeOptionalText(input.cliente_ruc),
+    sector_ax_nombre: normalizeOptionalText(input.sector_ax_nombre),
     sector_nombre: normalizeOptionalText(input.sector_nombre),
     negocio_nombre: normalizeOptionalText(input.negocio_nombre),
     linea_nombre: normalizeOptionalText(input.linea_nombre),
+    sublinea_nombre: normalizeOptionalText(input.sublinea_nombre),
+    grupo_nombre: normalizeOptionalText(input.grupo_nombre),
     ejecutivo_nombre: normalizeOptionalText(input.ejecutivo_nombre),
     proyecto: normalizeOptionalText(input.proyecto),
     codigo_articulo: normalizeOptionalText(input.codigo_articulo),
@@ -522,6 +575,9 @@ export async function updateImportFactRow(
     cantidad: input.cantidad,
     ventas_monto: input.ventas_monto,
     proyeccion_monto: input.proyeccion_monto,
+    costo_monto: input.costo_monto,
+    margen_monto: input.margen_monto,
+    porcentaje_num: input.porcentaje_num,
     probabilidad_num: input.probabilidad_num,
     observaciones: normalizeOptionalText(input.observaciones),
   });
@@ -536,6 +592,7 @@ export async function updateImportFactRow(
       ...row,
       payload: {
         ...row.payload,
+        anio: parsed.anio,
         mes: parsed.mes,
         semana: parsed.semana,
         fecha_registro: parsed.fecha_registro,
@@ -560,10 +617,16 @@ export async function updateImportFactRow(
         observaciones: parsed.observaciones,
         cliente: parsed.cliente_nombre,
         ruc: parsed.cliente_ruc,
+        sector_ax: parsed.sector_ax_nombre,
         sector: parsed.sector_nombre,
         negocio: parsed.negocio_nombre,
         linea: parsed.linea_nombre,
+        sublinea: parsed.sublinea_nombre,
+        grupo: parsed.grupo_nombre,
         ejecutivo: parsed.ejecutivo_nombre,
+        costo_monto: parsed.costo_monto,
+        margen_monto: parsed.margen_monto,
+        porcentaje_num: parsed.porcentaje_num,
       },
     } satisfies ImportJsonRow;
   });

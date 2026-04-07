@@ -11,10 +11,10 @@ export async function getExecutiveBillingByLineSummary(): Promise<BillingByLineS
   const negocioSet = new Set<string>();
 
   for (const row of importRows) {
-    if (row.situacion !== "facturado") continue;
+    if (row.fechaFacturacion === null && row.situacion !== "facturado") continue;
     if (!row.linea || row.ventasMonto === null) continue;
 
-    yearSet.add(row.importYear);
+    if (row.importYear !== null) yearSet.add(row.importYear);
     if (row.negocio) negocioSet.add(row.negocio);
 
     rows.push({

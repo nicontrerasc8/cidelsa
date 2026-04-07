@@ -6,13 +6,13 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { Building2, Filter, ReceiptText } from "lucide-react";
 
+import { ChartContainer } from "@/components/charts/chart-container";
 import { KpiCard } from "@/components/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -30,14 +30,14 @@ import type { BillingByLineSummary } from "@/modules/dashboard/services/billing-
 
 const ALL_VALUE = "__all__";
 const CHART_COLORS = [
-  "#1f3b5c",
-  "#29567f",
-  "#3471a3",
-  "#4388bd",
-  "#5ea3d1",
-  "#7cbbe0",
-  "#9bd0ea",
-  "#b8e2f3",
+  "#38bdf8",
+  "#0ea5e9",
+  "#0284c7",
+  "#22d3ee",
+  "#06b6d4",
+  "#67e8f9",
+  "#7dd3fc",
+  "#bae6fd",
 ] as const;
 
 type BillingAggregate = {
@@ -51,17 +51,23 @@ function FilterSelect({
   value,
   options,
   onChange,
+  className,
+  labelClassName,
+  selectClassName,
 }: {
   label: string;
   value: string;
   options: Array<{ label: string; value: string }>;
   onChange: (value: string) => void;
+  className?: string;
+  labelClassName?: string;
+  selectClassName?: string;
 }) {
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <div className={className ?? "space-y-2"}>
+      <Label className={labelClassName}>{label}</Label>
       <select
-        className="flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+        className={`flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring ${selectClassName ?? ""}`}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -135,7 +141,7 @@ export function BillingByLineDashboard({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[2rem] border border-border/60 bg-[linear-gradient(135deg,#10213d_0%,#1d3f6e_48%,#9fd4ff_100%)] p-6 text-white shadow-lg">
+      <section className="rounded-[2rem] border border-sky-200/20 bg-[linear-gradient(135deg,#081a2f_0%,#12345a_45%,#1f6aa5_100%)] p-6 text-white shadow-[0_24px_60px_rgba(8,26,47,0.22)]">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm uppercase tracking-[0.3em] text-white/70">
@@ -144,21 +150,25 @@ export function BillingByLineDashboard({
             <h1 className="mt-3 text-3xl font-semibold tracking-tight">
               Facturación por línea
             </h1>
-            <p className="mt-3 text-sm leading-6 text-white/80">
-              Se consideran solo filas con `Situación = Facturado` para analizar
-              la facturación acumulada por línea.
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/82">
+              Revisa qué líneas concentran más facturación y filtra por año o negocio
+              para leer el mix comercial con más claridad.
             </p>
           </div>
 
           <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-white/10 p-4 backdrop-blur md:grid-cols-2">
             <FilterSelect
               label="Año"
+              labelClassName="text-white/78"
+              selectClassName="border-white/15 bg-white/10 text-white focus-visible:ring-white/40"
               value={selectedYear}
               options={yearOptions}
               onChange={setSelectedYear}
             />
             <FilterSelect
               label="Negocio"
+              labelClassName="text-white/78"
+              selectClassName="border-white/15 bg-white/10 text-white focus-visible:ring-white/40"
               value={selectedNegocio}
               options={negocioOptions}
               onChange={setSelectedNegocio}
@@ -180,22 +190,43 @@ export function BillingByLineDashboard({
           </CardHeader>
           <CardContent className="h-[430px]">
             {chartData.length ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ChartContainer className="rounded-[1.25rem] bg-muted/20 p-2">
                 <BarChart data={chartData} layout="vertical" margin={{ left: 24, right: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tickFormatter={(value) => formatCurrency(Number(value))} />
-                  <YAxis type="category" dataKey="linea" width={180} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
+                  <CartesianGrid stroke="rgba(100,116,139,0.25)" strokeDasharray="3 3" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "rgb(255, 255, 255)", fontSize: 12 }}
+                    tickFormatter={(value) => formatCurrency(Number(value))}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="linea"
+                    width={180}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "rgb(255, 255, 255)", fontSize: 12 }}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "rgba(59,130,246,0.08)" }}
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      border: "1px solid rgba(148,163,184,0.35)",
+                      borderRadius: "16px",
+                      color: "#ffffff",
+                    }}
+                    itemStyle={{ color: "#0f172a" }}
+                    labelStyle={{ color: "rgba(15,23,42,0.72)" }}
+                    formatter={(value) => formatCurrency(Number(value ?? 0))}
+                  />
                   <Bar dataKey="ventasMonto" radius={[0, 10, 10, 0]}>
                     {chartData.map((entry, index) => (
-                      <Cell
-                        key={entry.linea}
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      />
+                      <Cell key={entry.linea} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <div className="flex h-full items-center justify-center rounded-3xl border border-dashed text-sm text-muted-foreground">
                 No hay facturación para los filtros seleccionados.

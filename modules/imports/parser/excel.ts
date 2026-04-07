@@ -42,6 +42,17 @@ const AX_IMPORT_COLUMN_ORDER = [
   "observaciones",
 ] as const;
 
+function getWorksheetHeaders(worksheet: ExcelJS.Worksheet) {
+  const headerRow = worksheet.getRow(1);
+  const headers = (headerRow.values as unknown[]).slice(1).map((value) => {
+    const normalized = normalizeExcelCellValue(value);
+    return typeof normalized === "string" ? normalized.trim() : "";
+  });
+
+  const hasNamedHeaders = headers.some((header) => header.length > 0);
+  return hasNamedHeaders ? headers : [...AX_IMPORT_COLUMN_ORDER];
+}
+
 export interface ParsedWorkbookPreview {
   sheetName: string;
   columns: string[];
@@ -62,6 +73,7 @@ export async function parseAxWorkbook(file: File) {
   }
 
   const parsedRows: ParsedAxRow[] = [];
+  const headers = getWorksheetHeaders(worksheet);
 
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
@@ -72,14 +84,14 @@ export async function parseAxWorkbook(file: File) {
 
     if (!hasContent) return;
 
-    const payload = buildPayloadFromRow([...AX_IMPORT_COLUMN_ORDER], values);
+    const payload = buildPayloadFromRow(headers, values);
     parsedRows.push(normalizeAxRow(rowNumber, payload));
   });
 
   console.groupCollapsed("[imports][parser] Excel recibido");
   console.log("archivo", file.name);
   console.log("hoja", worksheet.name);
-  console.log("columnas_esperadas", AX_IMPORT_COLUMN_ORDER);
+  console.log("columnas_detectadas", headers);
   console.log("total_filas_parseadas", parsedRows.length);
   console.log(
     "filas_con_error",
@@ -109,7 +121,7 @@ export async function parseAxWorkbook(file: File) {
 
   return {
     sheetName: worksheet.name,
-    columns: [...AX_IMPORT_COLUMN_ORDER],
+    columns: headers,
     previewRows: parsedRows.slice(0, 5).map((row) => row.payload),
     parsedRows,
   } satisfies ParsedWorkbookPreview;

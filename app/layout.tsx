@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { GlobalLoadingOverlay } from "@/components/global-loading-overlay";
 import { Toaster } from "@/components/providers/toaster";
 import "./globals.css";
 
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cidelsa Command Center",
+  title: "Cidelsa ",
   description: "Dashboard gerencial interno para analitica comercial e importaciones AX.",
 };
 
@@ -30,6 +31,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
+        <GlobalLoadingOverlay />
         {children}
         <Toaster />
       </body>

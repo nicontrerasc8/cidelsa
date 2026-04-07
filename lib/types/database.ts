@@ -18,7 +18,7 @@ export interface ImportRecord {
   id: string;
   file_name: string;
   storage_path: string | null;
-  anio: number;
+  anio: number | null;
   uploaded_by: string;
   uploaded_at: string;
   status: "pending" | "processing" | "processed" | "failed";
@@ -59,8 +59,14 @@ export interface ImportFactRow {
   observaciones: string | null;
   cliente_nombre: string | null;
   cliente_ruc: string | null;
+  sector_ax_nombre: string | null;
   sector_nombre: string | null;
   negocio_nombre: string | null;
   linea_nombre: string | null;
+  sublinea_nombre: string | null;
+  grupo_nombre: string | null;
   ejecutivo_nombre: string | null;
+  costo_monto: number | null;
+  margen_monto: number | null;
+  porcentaje_num: number | null;
 }
