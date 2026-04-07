@@ -14,7 +14,7 @@ export async function getExecutiveSalesByClientSummary(): Promise<SalesByClientS
   for (const row of importRows) {
     if (!row.cliente || row.ventasMonto === null) continue;
 
-    yearSet.add(row.importYear);
+    if (row.importYear !== null) yearSet.add(row.importYear);
     if (row.negocio) negocioSet.add(row.negocio);
     if (row.linea) lineaSet.add(row.linea);
 
