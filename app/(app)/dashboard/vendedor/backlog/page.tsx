@@ -24,6 +24,7 @@ export default async function SellerBacklogPage() {
       totalLabel="Mi backlog total"
       emptyLabel="No hay backlog visible para tu usuario."
       totalVisibleLabel="Total backlog visible:"
+      showEtapaFilter={false}
     />
   );
 }

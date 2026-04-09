@@ -26,7 +26,6 @@ import { buildBacklogMatrix } from "@/modules/dashboard/lib/backlog-matrix";
 
 const ALL_VALUE = "__all__";
 const MONTH_ALL_VALUE = "__all_months__";
-const DEFAULT_STAGE_VALUE = "informacion";
 const MONTH_LABELS = [
   "Enero",
   "Febrero",
@@ -158,6 +157,8 @@ export function BacklogMatrixDashboard({
   emptyLabel = "No hay backlog para el negocio seleccionado.",
   totalVisibleLabel = "Total backlog visible:",
   showSituacionBreakdown = true,
+  showEtapaFilter = true,
+  defaultEtapaValue = ALL_VALUE,
 }: {
   summary: BacklogMatrixSummary;
   title?: string;
@@ -168,9 +169,11 @@ export function BacklogMatrixDashboard({
   emptyLabel?: string;
   totalVisibleLabel?: string;
   showSituacionBreakdown?: boolean;
+  showEtapaFilter?: boolean;
+  defaultEtapaValue?: string;
 }) {
   const [selectedNegocio, setSelectedNegocio] = useState<string>(ALL_VALUE);
-  const [selectedEtapa, setSelectedEtapa] = useState<string>(DEFAULT_STAGE_VALUE);
+  const [selectedEtapa, setSelectedEtapa] = useState<string>(defaultEtapaValue);
   const [selectedSituacion, setSelectedSituacion] = useState<string>(ALL_VALUE);
   const [selectedEjecutivo, setSelectedEjecutivo] = useState<string>(ALL_VALUE);
   const [selectedLinea, setSelectedLinea] = useState<string>(ALL_VALUE);
@@ -179,7 +182,7 @@ export function BacklogMatrixDashboard({
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
   const showSituacionFilter = summary.situaciones.length > 1;
-  const showEtapaFilter = summary.etapas.length > 0;
+  const hasEtapaFilter = showEtapaFilter && summary.etapas.length > 0;
 
   function syncHorizontalScroll(source: "top" | "bottom") {
     const top = topScrollRef.current;
@@ -202,7 +205,7 @@ export function BacklogMatrixDashboard({
       rows: summary.rows.filter((row) => {
         if (selectedNegocio !== ALL_VALUE && row.negocio !== selectedNegocio) return false;
         if (
-          showEtapaFilter &&
+          hasEtapaFilter &&
           selectedEtapa !== ALL_VALUE &&
           row.etapa !== selectedEtapa
         ) {
@@ -227,7 +230,7 @@ export function BacklogMatrixDashboard({
       selectedLinea,
       selectedMonth,
       selectedNegocio,
-      showEtapaFilter,
+      hasEtapaFilter,
       selectedSituacion,
       showSituacionFilter,
       summary,
@@ -404,7 +407,7 @@ export function BacklogMatrixDashboard({
                 {activeNegocioLabel}
               </span>
               <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">
-                {showEtapaFilter
+                {hasEtapaFilter
                   ? selectedEtapa === ALL_VALUE
                     ? "Todas las etapas"
                     : selectedEtapa
@@ -449,7 +452,7 @@ export function BacklogMatrixDashboard({
                 }}
                 options={negocioOptions}
               />
-              {showEtapaFilter ? (
+              {hasEtapaFilter ? (
                 <FilterField label="Etapa" value={selectedEtapa} onChange={setSelectedEtapa} options={etapaOptions} />
               ) : null}
               {showSituacionFilter ? (

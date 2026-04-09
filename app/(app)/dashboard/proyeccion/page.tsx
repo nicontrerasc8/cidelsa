@@ -25,6 +25,7 @@ export default async function ProjectionPage() {
       emptyLabel="No hay proyección para el negocio seleccionado."
       totalVisibleLabel="Total proyección visible:"
       showSituacionBreakdown={false}
+      defaultEtapaValue="informacion"
     />
   );
 }

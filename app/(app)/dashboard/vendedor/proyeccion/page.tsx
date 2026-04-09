@@ -25,6 +25,7 @@ export default async function SellerProjectionPage() {
       emptyLabel="No hay proyección visible para tu usuario."
       totalVisibleLabel="Total proyección visible:"
       showSituacionBreakdown={false}
+      defaultEtapaValue="informacion"
     />
   );
 }

@@ -14,5 +14,5 @@ export default async function BacklogPage() {
 
   const summary = await getBacklogMatrixSummary();
 
-  return <BacklogMatrixDashboard summary={summary} />;
+  return <BacklogMatrixDashboard summary={summary} showEtapaFilter={false} />;
 }
