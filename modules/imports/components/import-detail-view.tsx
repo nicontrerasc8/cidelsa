@@ -507,16 +507,16 @@ export function ImportDetailView({
                     <Input value={editable.semana} onChange={(e) => patchEditableRow(row.id, { semana: e.target.value })} />
                   </Field>
 
-                  <Field label="Fecha de registro">
+                  <Field label="Fecha de ingreso">
                     <Input type="date" value={editable.fecha_registro} onChange={(e) => patchEditableRow(row.id, { fecha_registro: e.target.value })} />
                   </Field>
                   <Field label="Fecha de adjudicación">
                     <Input type="date" value={editable.fecha_adjudicacion} onChange={(e) => patchEditableRow(row.id, { fecha_adjudicacion: e.target.value })} />
                   </Field>
-                  <Field label="Fecha de facturación">
+                  <Field label="Fecha Factura">
                     <Input type="date" value={editable.fecha_facturacion} onChange={(e) => patchEditableRow(row.id, { fecha_facturacion: e.target.value })} />
                   </Field>
-                  <Field label="Situación">
+                  <Field label="Estado">
                     <Input value={editable.situacion} onChange={(e) => patchEditableRow(row.id, { situacion: e.target.value })} />
                   </Field>
 
@@ -584,7 +584,7 @@ export function ImportDetailView({
                   <Field label="BL / Proy">
                     <Input value={editable.tipo_pipeline} onChange={(e) => patchEditableRow(row.id, { tipo_pipeline: e.target.value })} />
                   </Field>
-                  <Field label="Ventas S/">
+                  <Field label="Ventas">
                     <Input value={editable.ventas_monto} onChange={(e) => patchEditableRow(row.id, { ventas_monto: e.target.value })} />
                   </Field>
                   <Field label="Proyección">

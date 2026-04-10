@@ -8,6 +8,7 @@ import {
   getPayloadNegocio,
   getPayloadVentasMonto,
   getPayloadYear,
+  hasFacturacion,
   isRecord,
   normalizeText,
   parseMonthIndex,
@@ -63,6 +64,8 @@ export async function getSalesByExecutiveSummary(): Promise<SalesByExecutiveSumm
       if (!isRecord(rawRow) || !isRecord(rawRow.payload)) continue;
 
       const payload = rawRow.payload;
+      if (!hasFacturacion(payload)) continue;
+
       const ejecutivo = normalizeText(payload.ejecutivo);
       const ventasMonto = getPayloadVentasMonto(payload);
       const negocio = getPayloadNegocio(payload);

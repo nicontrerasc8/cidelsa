@@ -20,8 +20,10 @@ export async function PATCH(
     }
 
     const { importId } = await params;
-    await request.json().catch(() => null);
-    await updateImportMetadata(importId);
+    const body = (await request.json().catch(() => null)) as { anio?: number } | null;
+    await updateImportMetadata(importId, {
+      anio: body?.anio ?? 0,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

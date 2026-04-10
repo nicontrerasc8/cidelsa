@@ -8,12 +8,11 @@ import {
 } from "@/modules/imports/parser/ax-normalizer";
 
 const AX_IMPORT_COLUMN_ORDER = [
+  "anio",
   "situacion",
   "mes",
-  "semana",
   "orden_venta",
   "fecha_registro",
-  "fecha_adjudicacion",
   "factura",
   "fecha_facturacion",
   "oc",
@@ -22,7 +21,8 @@ const AX_IMPORT_COLUMN_ORDER = [
   "cliente",
   "negocio",
   "linea",
-  "proyecto",
+  "sublinea",
+  "grupo",
   "codigo_articulo",
   "articulo",
   "dimension1",
@@ -30,14 +30,7 @@ const AX_IMPORT_COLUMN_ORDER = [
   "dimension3",
   "cantidad",
   "um",
-  "etapa",
-  "motivo_perdida",
-  "tipo_pipeline",
-  "pipeline",
-  "licitacion_flag",
-  "probabilidad_num",
   "ventas_monto",
-  "proyeccion_monto",
   "ejecutivo",
   "observaciones",
 ] as const;

@@ -14,7 +14,8 @@ export async function getExecutiveProjectionMatrixSummary(): Promise<ProjectionM
 
   for (const row of importRows) {
     if (row.tipoPipeline !== "proyeccion") continue;
-    if (row.ventasMonto === null) continue;
+    const pipelineMonto = row.pipelineMonto;
+    if (pipelineMonto === null) continue;
     if (row.importYear !== null) yearSet.add(row.importYear);
     if (row.negocio) negocioSet.add(row.negocio);
     if (row.etapa) etapaSet.add(row.etapa);
@@ -29,7 +30,7 @@ export async function getExecutiveProjectionMatrixSummary(): Promise<ProjectionM
       situacion: row.situacion,
       ejecutivo: row.ejecutivo,
       monthIndex: row.monthIndex,
-      ventasMonto: row.ventasMonto,
+      ventasMonto: pipelineMonto,
     });
   }
 

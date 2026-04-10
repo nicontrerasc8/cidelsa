@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { importYearSchema } from "@/lib/validators/imports";
 import { canAccessImports } from "@/modules/imports/services/import-service";
-import { createAccountingImportFromUpload } from "@/modules/imports/services/accounting-import-service";
+import {
+  createAccountingImportFromUpload,
+  saveAccountingImportFromPreview,
+} from "@/modules/imports/services/accounting-import-service";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -20,37 +23,50 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No autorizado." }, { status: 403 });
     }
 
+    const contentType = request.headers.get("content-type") ?? "";
+
+    if (contentType.includes("application/json")) {
+      const body = (await request.json()) as {
+        fileName?: string;
+        importYear?: number;
+        sheetName?: string;
+        monthlyRowsBySection?: unknown;
+      };
+
+      if (
+        typeof body.fileName !== "string" ||
+        typeof body.sheetName !== "string" ||
+        !body.monthlyRowsBySection ||
+        typeof body.monthlyRowsBySection !== "object"
+      ) {
+        return NextResponse.json(
+          { error: "Payload contable invalido para guardar." },
+          { status: 400 },
+        );
+      }
+
+      const result = await saveAccountingImportFromPreview(
+        {
+          fileName: body.fileName,
+          importYear: importYearSchema.parse(body.importYear),
+          sheetName: body.sheetName,
+          monthlyRowsBySection: body.monthlyRowsBySection as Parameters<
+            typeof saveAccountingImportFromPreview
+          >[0]["monthlyRowsBySection"],
+        },
+        currentUser,
+      );
+
+      return NextResponse.json(result, { status: 201 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
     const importYearRaw = formData.get("anio");
-    const negocio = formData.get("negocio");
-    const periodoDesde = formData.get("periodo_desde");
-    const periodoHasta = formData.get("periodo_hasta");
 
     if (!(file instanceof File)) {
       return NextResponse.json(
         { error: "Debes adjuntar un archivo Excel valido." },
-        { status: 400 },
-      );
-    }
-
-    if (typeof negocio !== "string" || !negocio.trim()) {
-      return NextResponse.json(
-        { error: "Debes seleccionar un negocio para la carga contable." },
-        { status: 400 },
-      );
-    }
-
-    if (typeof periodoDesde !== "string" || !periodoDesde.trim()) {
-      return NextResponse.json(
-        { error: "Debes seleccionar el periodo inicial para la carga contable." },
-        { status: 400 },
-      );
-    }
-
-    if (typeof periodoHasta !== "string" || !periodoHasta.trim()) {
-      return NextResponse.json(
-        { error: "Debes seleccionar el periodo final para la carga contable." },
         { status: 400 },
       );
     }
@@ -60,12 +76,9 @@ export async function POST(request: Request) {
       file,
       currentUser,
       importYear,
-      negocio,
-      periodoDesde,
-      periodoHasta,
     );
 
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(result);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo procesar la carga contable.";

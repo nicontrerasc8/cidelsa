@@ -166,6 +166,8 @@ export function GlobalLoadingOverlay() {
     function handleChange(event: Event) {
       const target = event.target as HTMLElement | null;
 
+      if (target?.closest("[data-loading-overlay-ignore='true']")) return;
+
       if (target instanceof HTMLSelectElement) {
         showOverlay("filter");
       }

@@ -7,6 +7,7 @@ import {
   getPayloadCliente,
   getPayloadNegocio,
   getPayloadPipeline,
+  getPayloadPipelineMonto,
   getPayloadVentasMonto,
   getPayloadYear,
   isRecord,
@@ -31,6 +32,7 @@ export type ExecutiveImportRow = {
   monthIndex: number | null;
   tipoPipeline: string | null;
   ventasMonto: number | null;
+  pipelineMonto: number | null;
   fechaFacturacion: string | null;
   ejecutivo: string | null;
 };
@@ -77,6 +79,7 @@ export async function getExecutiveImportRows() {
         monthIndex: parseMonthIndex(payload.mes),
         tipoPipeline: getPayloadPipeline(payload),
         ventasMonto: getPayloadVentasMonto(payload),
+        pipelineMonto: getPayloadPipelineMonto(payload),
         fechaFacturacion: normalizeText(payload.fecha_facturacion),
         ejecutivo: normalizeText(payload.ejecutivo),
       });

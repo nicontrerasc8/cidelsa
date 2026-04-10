@@ -16,20 +16,28 @@ export function KpiCard({
   icon: Icon,
   tone = "default",
   format = "currency",
+  valueFormatter,
 }: {
   title: string;
   value: number;
   icon: LucideIcon;
   tone?: keyof typeof toneMap;
   format?: "currency" | "number";
+  valueFormatter?: (value: number) => string;
 }) {
+  const formattedValue = valueFormatter
+    ? valueFormatter(value)
+    : format === "currency"
+      ? formatCurrency(value)
+      : formatNumber(value);
+
   return (
     <Card>
       <CardContent className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">{title}</p>
           <p className="mt-3 text-3xl font-semibold tracking-tight">
-            {format === "currency" ? formatCurrency(value) : formatNumber(value)}
+            {formattedValue}
           </p>
         </div>
         <div className={`rounded-2xl p-3 ${toneMap[tone]}`}>

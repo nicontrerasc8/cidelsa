@@ -7,14 +7,18 @@ export interface ParsedAxRow {
 
 const HEADER_ALIASES: Record<string, string> = {
   ano: "anio",
+  estado: "situacion",
   año: "anio",
   situacion: "situacion",
   mes: "mes",
   semana: "semana",
   "fecha registro": "fecha_registro",
   "fecha de registro": "fecha_registro",
+  "fecha ingreso": "fecha_registro",
+  "fecha de ingreso": "fecha_registro",
   "fecha adjudicacion": "fecha_adjudicacion",
   "fecha de adjudicacion": "fecha_adjudicacion",
+  "fecha factura": "fecha_facturacion",
   "fecha facturacion": "fecha_facturacion",
   "fecha de facturacion": "fecha_facturacion",
   "orden venta": "orden_venta",

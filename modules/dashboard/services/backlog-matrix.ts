@@ -9,7 +9,7 @@ import {
   getPayloadEjecutivo,
   getPayloadNegocio,
   getPayloadPipeline,
-  getPayloadVentasMonto,
+  getPayloadPipelineMonto,
   getPayloadYear,
   isRecord,
   normalizeComparableText,
@@ -25,6 +25,18 @@ export type BacklogMatrixSummary = {
   etapas: string[];
   ejecutivos: string[];
   lineas: string[];
+  debugPayloadRows?: Array<{
+    importId: string | null;
+    fileName: string | null;
+    rowNumber: number | null;
+    parseStatus: string | null;
+    tipoPipeline: string | null;
+    pipelineMonto: number | null;
+    ventasMonto: number | null;
+    proyeccionMonto: number | null;
+    situacion: string | null;
+    payload: Record<string, unknown>;
+  }>;
   rows: Array<{
     importYear: number | null;
     negocio: string | null;
@@ -59,13 +71,8 @@ export async function getBacklogMatrixSummary(): Promise<BacklogMatrixSummary> {
     };
   }
 
-  const negocioSet = new Set<string>();
-  const yearSet = new Set<number>();
-  const situacionSet = new Set<string>();
-  const etapaSet = new Set<string>();
-  const ejecutivoSet = new Set<string>();
-  const lineaSet = new Set<string>();
-  const rows: BacklogMatrixSummary["rows"] = [];
+  const candidateRows: BacklogMatrixSummary["rows"] = [];
+  const explicitBacklogRows: BacklogMatrixSummary["rows"] = [];
 
   for (const item of data as Array<{ data?: unknown }>) {
     if (!isRecord(item.data) || !Array.isArray(item.data.rows)) continue;
@@ -75,8 +82,6 @@ export async function getBacklogMatrixSummary(): Promise<BacklogMatrixSummary> {
 
       const payload = rawRow.payload;
       const tipoPipeline = getPayloadPipeline(payload);
-      if (tipoPipeline !== "backlog") continue;
-
       const negocio = getPayloadNegocio(payload);
       const importYear = getPayloadYear(payload.anio);
       const linea = normalizeText(payload.linea);
@@ -85,17 +90,11 @@ export async function getBacklogMatrixSummary(): Promise<BacklogMatrixSummary> {
       const situacion = normalizeSituation(payload.situacion);
       const ejecutivo = getPayloadEjecutivo(payload);
       const monthIndex = parseMonthIndex(payload.mes);
-      const ventasMonto = getPayloadVentasMonto(payload);
+      const ventasMonto = getPayloadPipelineMonto(payload);
 
       if (ventasMonto === null) continue;
-      if (importYear !== null) yearSet.add(importYear);
-      if (negocio) negocioSet.add(negocio);
-      if (etapa) etapaSet.add(etapa);
-      if (situacion) situacionSet.add(situacion);
-      if (ejecutivo) ejecutivoSet.add(ejecutivo);
-      if (linea) lineaSet.add(linea);
 
-      rows.push({
+      const row = {
         importYear,
         negocio,
         linea,
@@ -105,8 +104,28 @@ export async function getBacklogMatrixSummary(): Promise<BacklogMatrixSummary> {
         ejecutivo,
         monthIndex,
         ventasMonto,
-      });
+      };
+
+      candidateRows.push(row);
+      if (tipoPipeline === "backlog") explicitBacklogRows.push(row);
     }
+  }
+
+  const rows = explicitBacklogRows.length > 0 ? explicitBacklogRows : candidateRows;
+  const negocioSet = new Set<string>();
+  const yearSet = new Set<number>();
+  const situacionSet = new Set<string>();
+  const etapaSet = new Set<string>();
+  const ejecutivoSet = new Set<string>();
+  const lineaSet = new Set<string>();
+
+  for (const row of rows) {
+    if (row.importYear !== null) yearSet.add(row.importYear);
+    if (row.negocio) negocioSet.add(row.negocio);
+    if (row.etapa) etapaSet.add(row.etapa);
+    if (row.situacion) situacionSet.add(row.situacion);
+    if (row.ejecutivo) ejecutivoSet.add(row.ejecutivo);
+    if (row.linea) lineaSet.add(row.linea);
   }
 
   return {

@@ -1,481 +1,330 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BarChart3, Filter, PackageOpen } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
+import {
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ZAxis,
+} from "recharts";
+import type { LucideIcon } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  Filter,
+  LayoutDashboard,
+  Lightbulb,
+  ListOrdered,
+  PackageOpen,
+  PieChart as PieChartIcon,
+  Target,
+  TrendingUp,
+} from "lucide-react";
 
-import { KpiCard } from "@/components/kpi-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { formatCurrency } from "@/lib/utils";
 import type { VariationsSummary } from "@/modules/dashboard/services/variations";
 
 const ALL_VALUE = "__all__";
+const MONTH_ORDER = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"];
+const CHART_COLORS = ["#38bdf8", "#818cf8", "#fb7185", "#facc15", "#a3e635", "#22d3ee", "#c084fc", "#f97316"] as const;
 
-type VariationAggregate = {
-  label: string;
-  previousReal: number;
-  currentBudget: number;
-  currentReal: number;
-  grossMargin: number | null;
-};
+type VariationRow = VariationsSummary["rows"][number];
+type Totals = { ventas: number; margen: number };
+type MetricRow = { name: string; ventas: number; margen: number; margenPct: number };
+type TabId = "insights" | "matrix" | "table";
+type ColorTone = "blue" | "emerald" | "amber" | "rose";
 
-type VariationTotals = {
-  previousReal: number;
-  currentBudget: number;
-  currentReal: number;
-  grossMargin: number | null;
-};
-
-function formatPen(value: number) {
-  return new Intl.NumberFormat("es-PE", {
-    style: "currency",
-    currency: "PEN",
-    maximumFractionDigits: 0,
-  }).format(value || 0);
+function formatCurrency(value: number | null | undefined) {
+  return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", notation: "compact", maximumFractionDigits: 1 }).format(value || 0);
 }
 
-function formatPercent(value: number | null) {
-  if (value === null || Number.isNaN(value) || !Number.isFinite(value)) return "-";
-  return `${new Intl.NumberFormat("es-PE", { maximumFractionDigits: 0 }).format(value)}%`;
+function formatFullCurrency(value: number | null | undefined) {
+  return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value || 0);
 }
 
-function calculateVariationPercent(currentReal: number, previousReal: number) {
-  if (!previousReal) return null;
-  return ((currentReal - previousReal) / previousReal) * 100;
+function formatPercent(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value) || !Number.isFinite(value)) return "-";
+  return `${value.toFixed(1)}%`;
 }
 
-function calculateBudgetAchievement(currentReal: number, currentBudget: number) {
-  if (!currentBudget) return null;
-  return (currentReal / currentBudget) * 100;
+function marginPct(margen: number, ventas: number) {
+  return ventas ? (margen / ventas) * 100 : 0;
 }
 
-function calculateMarginPercent(grossMargin: number | null, currentReal: number) {
-  if (grossMargin === null || !currentReal) return null;
-  return (grossMargin / currentReal) * 100;
+function sortPeriodNames(a: string, b: string) {
+  const indexA = MONTH_ORDER.indexOf(a);
+  const indexB = MONTH_ORDER.indexOf(b);
+  if (indexA !== -1 || indexB !== -1) return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
+  return a.localeCompare(b, "es");
 }
 
-function addNullableNumbers(current: number | null, next: number | null) {
-  if (next === null) return current;
-  return (current ?? 0) + next;
+function sumRows(rows: VariationRow[]): Totals {
+  return rows.reduce<Totals>((acc, row) => ({ ventas: acc.ventas + row.currentReal, margen: acc.margen + (row.grossMargin ?? 0) }), { ventas: 0, margen: 0 });
 }
 
-function FilterSelect({
-  label,
-  value,
-  options,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  value: string;
-  options: Array<{ label: string; value: string }>;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
+function percentChange(current: number, previous: number) {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function buildMetricRows(rows: VariationRow[], keySelector: (row: VariationRow) => string | null | undefined) {
+  const grouped = new Map<string, Totals>();
+  for (const row of rows) {
+    const key = keySelector(row) || "Sin dato";
+    const current = grouped.get(key) ?? { ventas: 0, margen: 0 };
+    current.ventas += row.currentReal;
+    current.margen += row.grossMargin ?? 0;
+    grouped.set(key, current);
+  }
+  return [...grouped.entries()]
+    .map<MetricRow>(([name, totals]) => ({ name, ventas: totals.ventas, margen: totals.margen, margenPct: marginPct(totals.margen, totals.ventas) }))
+    .sort((a, b) => b.ventas - a.ventas);
+}
+
+function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40 backdrop-blur-md transition-all duration-300 hover:border-slate-700/50 ${className}`}>{children}</div>;
+}
+
+function KpiCard({ title, value, icon: Icon, trend, subtext, color = "blue" }: { title: string; value: string | number; icon: LucideIcon; trend?: number | null; subtext: string; color?: ColorTone }) {
+  const colorMap: Record<ColorTone, string> = {
+    blue: "from-blue-500/20 to-transparent text-blue-400 border-blue-500/20",
+    emerald: "from-emerald-500/20 to-transparent text-emerald-400 border-emerald-500/20",
+    amber: "from-amber-500/20 to-transparent text-amber-400 border-amber-500/20",
+    rose: "from-rose-500/20 to-transparent text-rose-400 border-rose-500/20",
+  };
+
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      <select
-        className="flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+    <Card className="p-6">
+      <div className={`absolute right-0 top-0 h-24 w-24 bg-gradient-to-br opacity-20 ${colorMap[color]}`} />
+      <div className="relative flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className={`rounded-2xl border p-3 ${colorMap[color]}`}><Icon size={24} /></div>
+          {trend !== undefined && trend !== null ? (
+            <div className={`flex items-center gap-1 text-sm font-bold ${trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              {trend >= 0 ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+              {Math.abs(trend).toFixed(1)}%
+            </div>
+          ) : null}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-slate-400">{title}</p>
+          <h3 className="mt-1 text-2xl font-bold text-white">{value}</h3>
+          <p className="mt-1 text-xs text-slate-500">{subtext}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string; fill?: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-2xl border border-slate-700 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-xl">
+      {label ? <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p> : null}
+      <div className="space-y-2">
+        {payload.map((item) => {
+          const name = String(item.name ?? "Valor");
+          return (
+            <div key={`${name}-${item.value}`} className="flex items-center justify-between gap-8">
+              <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color || item.fill }} /><span className="text-sm text-slate-300">{name}</span></div>
+              <span className="text-sm font-bold text-white">{name.includes("%") || name === "Crecimiento" ? formatPercent(item.value) : formatCurrency(item.value)}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function EmptyCell({ value }: { value: string }) {
-  return <span className={value === "-" ? "text-white/60" : undefined}>{value}</span>;
+function SelectFilter({ value, onChange, options, label }: { value: string; onChange: (value: string) => void; options: Array<{ label: string; value: string }>; label: string }) {
+  return (
+    <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className="rounded-2xl bg-slate-800 px-4 py-2 text-sm text-white outline-none ring-blue-500 transition-all focus:ring-2">
+      {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </select>
+  );
 }
 
-export function VariationsDashboard({
-  summary,
-}: {
-  summary: VariationsSummary;
-}) {
-  const [selectedYear, setSelectedYear] = useState<string>(ALL_VALUE);
-  const [selectedPeriod, setSelectedPeriod] = useState<string>(ALL_VALUE);
-  const [selectedNegocio, setSelectedNegocio] = useState<string>(ALL_VALUE);
-  const [selectedLinea, setSelectedLinea] = useState<string>(ALL_VALUE);
+function EmptyState({ children }: { children: ReactNode }) {
+  return <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-800 text-sm text-slate-500">{children}</div>;
+}
 
-  const availableLineas = useMemo(() => {
-    if (selectedNegocio === ALL_VALUE) return [];
+export function VariationsDashboard({ summary }: { summary: VariationsSummary }) {
+  const [selectedYear, setSelectedYear] = useState(ALL_VALUE);
+  const [selectedPeriod, setSelectedPeriod] = useState(ALL_VALUE);
+  const [selectedNegocio, setSelectedNegocio] = useState(ALL_VALUE);
+  const [selectedGroup, setSelectedGroup] = useState(ALL_VALUE);
+  const [activeTab, setActiveTab] = useState<TabId>("insights");
 
-    const lineas = new Set<string>();
-    for (const row of summary.rows) {
-      if (row.negocio === selectedNegocio) lineas.add(row.linea);
-    }
+  const selectedYearNumber = selectedYear === ALL_VALUE ? null : Number(selectedYear);
 
-    return [...lineas].sort((a, b) => a.localeCompare(b));
-  }, [selectedNegocio, summary.rows]);
+  const filteredRows = useMemo(() => summary.rows.filter((row) => {
+    if (selectedYearNumber !== null && row.importYear !== selectedYearNumber) return false;
+    if (selectedPeriod !== ALL_VALUE && row.periodo !== selectedPeriod) return false;
+    if (selectedNegocio !== ALL_VALUE && row.negocio !== selectedNegocio) return false;
+    if (selectedGroup !== ALL_VALUE && row.grupo !== selectedGroup) return false;
+    return true;
+  }), [selectedGroup, selectedNegocio, selectedPeriod, selectedYearNumber, summary.rows]);
 
-  const filteredRows = useMemo(() => {
+  const comparisonRows = useMemo(() => {
+    const comparisonYear = selectedYearNumber !== null ? selectedYearNumber - 1 : (summary.years[0] ?? 0) - 1;
+    if (!comparisonYear) return [];
     return summary.rows.filter((row) => {
-      if (selectedYear !== ALL_VALUE && row.importYear !== Number(selectedYear)) return false;
+      if (row.importYear !== comparisonYear) return false;
       if (selectedPeriod !== ALL_VALUE && row.periodo !== selectedPeriod) return false;
       if (selectedNegocio !== ALL_VALUE && row.negocio !== selectedNegocio) return false;
-      if (selectedLinea !== ALL_VALUE && row.linea !== selectedLinea) return false;
+      if (selectedGroup !== ALL_VALUE && row.grupo !== selectedGroup) return false;
       return true;
     });
-  }, [selectedLinea, selectedNegocio, selectedPeriod, selectedYear, summary.rows]);
+  }, [selectedGroup, selectedNegocio, selectedPeriod, selectedYearNumber, summary.rows, summary.years]);
 
-  const byNegocio = useMemo(() => {
-    const grouped = new Map<string, VariationAggregate>();
+  const metrics = useMemo(() => {
+    const totals = sumRows(filteredRows);
+    const comparisonTotals = sumRows(comparisonRows);
+    const business = buildMetricRows(filteredRows, (row) => row.negocio);
+    const groups = buildMetricRows(filteredRows, (row) => row.grupo);
 
-    for (const row of filteredRows) {
-      const key = row.negocio ?? "Sin negocio";
-      const current = grouped.get(key) ?? {
-        label: key,
-        previousReal: 0,
-        currentBudget: 0,
-        currentReal: 0,
-        grossMargin: null,
-      };
+    const evolutionSource = selectedYearNumber === null
+      ? summary.rows.filter((row) => {
+          if (selectedPeriod !== ALL_VALUE && row.periodo !== selectedPeriod) return false;
+          if (selectedNegocio !== ALL_VALUE && row.negocio !== selectedNegocio) return false;
+          if (selectedGroup !== ALL_VALUE && row.grupo !== selectedGroup) return false;
+          return true;
+        })
+      : filteredRows;
 
-      current.previousReal += row.previousReal;
-      current.currentBudget += row.currentBudget;
-      current.currentReal += row.currentReal;
-      current.grossMargin = addNullableNumbers(current.grossMargin, row.grossMargin);
-      grouped.set(key, current);
-    }
+    const evolution = buildMetricRows(evolutionSource, (row) => selectedYearNumber === null ? String(row.importYear) : row.periodo)
+      .sort((a, b) => selectedYearNumber === null ? Number(a.name) - Number(b.name) : sortPeriodNames(a.name, b.name));
 
-    return [...grouped.values()].sort((a, b) => b.currentReal - a.currentReal);
-  }, [filteredRows]);
+    const avgMarginPct = marginPct(totals.margen, totals.ventas);
+    const comparisonMarginPct = marginPct(comparisonTotals.margen, comparisonTotals.ventas);
 
-  const totalCurrentReal = byNegocio.reduce((sum, row) => sum + row.currentReal, 0);
+    return {
+      totalSales: totals.ventas,
+      totalMargin: totals.margen,
+      avgMarginPct,
+      salesTrend: percentChange(totals.ventas, comparisonTotals.ventas),
+      marginTrend: percentChange(totals.margen, comparisonTotals.margen),
+      efficiencyTrend: comparisonMarginPct ? avgMarginPct - comparisonMarginPct : null,
+      business,
+      evolution,
+      groups,
+    };
+  }, [comparisonRows, filteredRows, selectedGroup, selectedNegocio, selectedPeriod, selectedYearNumber, summary.rows]);
 
-  const byLinea = useMemo(() => {
-    const grouped = new Map<string, VariationAggregate>();
-
-    for (const row of filteredRows) {
-      const current = grouped.get(row.linea) ?? {
-        label: row.linea,
-        previousReal: 0,
-        currentBudget: 0,
-        currentReal: 0,
-        grossMargin: null,
-      };
-
-      current.previousReal += row.previousReal;
-      current.currentBudget += row.currentBudget;
-      current.currentReal += row.currentReal;
-      current.grossMargin = addNullableNumbers(current.grossMargin, row.grossMargin);
-      grouped.set(row.linea, current);
-    }
-
-    return [...grouped.values()].sort((a, b) => b.currentReal - a.currentReal);
-  }, [filteredRows]);
-
-  const totals = useMemo(() => {
-    return byLinea.reduce<VariationTotals>(
-      (acc, row) => ({
-        previousReal: acc.previousReal + row.previousReal,
-        currentBudget: acc.currentBudget + row.currentBudget,
-        currentReal: acc.currentReal + row.currentReal,
-        grossMargin: addNullableNumbers(acc.grossMargin, row.grossMargin),
-      }),
-      {
-        previousReal: 0,
-        currentBudget: 0,
-        currentReal: 0,
-        grossMargin: null,
-      },
-    );
-  }, [byLinea]);
-
-  const yearOptions = useMemo(
-    () => [
-      { label: "Todos los años", value: ALL_VALUE },
-      ...summary.years.map((year) => ({ label: String(year), value: String(year) })),
-    ],
-    [summary.years],
-  );
-
-  const negocioOptions = useMemo(
-    () => [
-      { label: "Todos los negocios", value: ALL_VALUE },
-      ...summary.negocios.map((negocio) => ({ label: negocio, value: negocio })),
-    ],
-    [summary.negocios],
-  );
-
-  const periodOptions = useMemo(
-    () => [
-      { label: "Todos los periodos", value: ALL_VALUE },
-      ...summary.periodos.map((periodo) => ({ label: periodo, value: periodo })),
-    ],
-    [summary.periodos],
-  );
-
-  const lineaOptions = useMemo(
-    () => [
-      { label: "Todas las lineas", value: ALL_VALUE },
-      ...availableLineas.map((linea) => ({ label: linea, value: linea })),
-    ],
-    [availableLineas],
-  );
-
-  const activeYearLabel =
-    selectedYear === ALL_VALUE ? "Todos los años" : selectedYear;
-  const activePeriodLabel =
-    selectedPeriod === ALL_VALUE ? "Todos los periodos" : selectedPeriod;
-  const activeNegocioLabel =
-    selectedNegocio === ALL_VALUE ? "Todos los negocios" : selectedNegocio;
-  const activeLineaLabel =
-    selectedLinea === ALL_VALUE ? "Todas las lineas" : selectedLinea;
+  const topSalesGroup = metrics.groups[0];
+  const topMarginGroup = [...metrics.groups].sort((a, b) => b.margenPct - a.margenPct)[0];
+  const yearOptions = useMemo(() => [{ label: "Historico", value: ALL_VALUE }, ...summary.years.map((year) => ({ label: String(year), value: String(year) }))], [summary.years]);
+  const periodOptions = useMemo(() => [{ label: "Todos los meses", value: ALL_VALUE }, ...summary.periodos.map((periodo) => ({ label: periodo, value: periodo }))], [summary.periodos]);
+  const negocioOptions = useMemo(() => [{ label: "Todos los negocios", value: ALL_VALUE }, ...summary.negocios.map((negocio) => ({ label: negocio, value: negocio }))], [summary.negocios]);
+  const groupOptions = useMemo(() => [{ label: "Todos los grupos", value: ALL_VALUE }, ...summary.grupos.map((grupo) => ({ label: grupo, value: grupo }))], [summary.grupos]);
+  const tabs: Array<{ id: TabId; label: string; icon: ComponentType<{ size?: number }> }> = [
+    { id: "insights", label: "Dashboard General", icon: LayoutDashboard },
+    { id: "matrix", label: "Matriz Estrategica", icon: Target },
+    { id: "table", label: "Detalle Transaccional", icon: ListOrdered },
+  ];
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[2rem] border border-border/60 bg-[linear-gradient(135deg,#0b1220_0%,#24364f_42%,#7ea7cf_100%)] p-6 text-white shadow-[0_24px_80px_rgba(10,18,32,0.28)]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_24%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.10),transparent_28%)]" />
-        <div className="absolute inset-y-0 right-[-9rem] w-72 rounded-full bg-white/10 blur-3xl" />
+    <div className="min-h-screen bg-[#05080f] text-slate-300 selection:bg-blue-500/30">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -left-[10%] -top-[10%] h-[40%] w-[40%] rounded-full bg-blue-600/10 blur-[120px]" />
+        <div className="absolute -right-[10%] top-[20%] h-[30%] w-[30%] rounded-full bg-indigo-600/10 blur-[100px]" />
+      </div>
 
-        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-4xl">
-            <p className="text-sm uppercase tracking-[0.32em] text-white/70">
-              Dashboard variaciones
-            </p>
-            <h1 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              Variaciones por negocio y línea
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-6 text-white/82">
-              Cruza la carga contable con el mapeo línea-negocio de AX para comparar año anterior real, presupuesto actual y real actual.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/85">
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">
-                {activeYearLabel}
-              </span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">
-                {activePeriodLabel}
-              </span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">
-                {activeNegocioLabel}
-              </span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">
-                {activeLineaLabel}
-              </span>
-            </div>
+      <div className="relative mx-auto max-w-[1400px] px-6 py-10">
+        <header className="mb-10 flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+          <div>
+            <div className="flex items-center gap-3 text-blue-400"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10"><LayoutDashboard size={24} /></div><span className="text-sm font-bold uppercase tracking-widest">Business Intelligence</span></div>
+            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">Analisis de Variaciones</h1>
+            <p className="mt-2 text-slate-400">Monitoreo de rentabilidad y eficiencia operativa con datos contables reales.</p>
           </div>
 
-          <div className="grid gap-3 rounded-[1.75rem] border border-white/15 bg-white/10 p-4 shadow-lg shadow-black/10 backdrop-blur-md md:grid-cols-2 xl:grid-cols-4">
-            <FilterSelect label="Año" value={selectedYear} options={yearOptions} onChange={setSelectedYear} />
-            <FilterSelect label="Periodo" value={selectedPeriod} options={periodOptions} onChange={setSelectedPeriod} />
-            <FilterSelect
-              label="Negocio"
-              value={selectedNegocio}
-              options={negocioOptions}
-              onChange={(value) => {
-                setSelectedNegocio(value);
-                setSelectedLinea(ALL_VALUE);
-              }}
-            />
-            <FilterSelect
-              label="Linea"
-              value={selectedLinea}
-              options={lineaOptions}
-              onChange={setSelectedLinea}
-              disabled={selectedNegocio === ALL_VALUE}
-            />
+          <div className="flex flex-wrap gap-3 rounded-3xl border border-slate-800 bg-slate-900/50 p-2 backdrop-blur-md">
+            <div className="flex items-center gap-2 px-3 py-2 text-slate-500"><Filter size={18} /><span className="text-xs font-bold uppercase">Filtros</span></div>
+            <SelectFilter label="Año" value={selectedYear} onChange={setSelectedYear} options={yearOptions} />
+            <SelectFilter label="Periodo" value={selectedPeriod} onChange={setSelectedPeriod} options={periodOptions} />
+            <SelectFilter label="Negocio" value={selectedNegocio} onChange={setSelectedNegocio} options={negocioOptions} />
+            <SelectFilter label="Grupo" value={selectedGroup} onChange={setSelectedGroup} options={groupOptions} />
           </div>
+        </header>
+
+        <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <KpiCard title="Ventas Totales" value={formatFullCurrency(metrics.totalSales)} icon={BarChart3} trend={metrics.salesTrend} subtext="vs año anterior comparable" color="blue" />
+          <KpiCard title="Margen Bruto" value={formatFullCurrency(metrics.totalMargin)} icon={TrendingUp} trend={metrics.marginTrend} subtext="Ganancia operativa" color="emerald" />
+          <KpiCard title="Eficiencia M.B." value={formatPercent(metrics.avgMarginPct)} icon={PieChartIcon} trend={metrics.efficiencyTrend} subtext="Puntos vs año anterior" color="amber" />
+          <KpiCard title="Grupos de Negocio" value={metrics.groups.length} icon={PackageOpen} subtext="Unidades operativas visibles" color="rose" />
         </div>
-      </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <KpiCard title="Real actual visible" value={totals.currentReal} icon={BarChart3} tone="primary" />
-        <KpiCard title="Negocios visibles" value={byNegocio.length} icon={PackageOpen} tone="success" format="number" />
-        <KpiCard title="Registros considerados" value={filteredRows.length} icon={Filter} tone="warning" format="number" />
-      </section>
+        <div className="mb-6 flex w-fit gap-1 rounded-2xl border border-slate-800 bg-slate-900/30 p-1">
+          {tabs.map((tab) => { const Icon = tab.icon; return <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold transition-all ${activeTab === tab.id ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-500 hover:bg-slate-800 hover:text-white"}`}><Icon size={18} />{tab.label}</button>; })}
+        </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <CardTitle>Variaciones por negocio</CardTitle>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Lectura consolidada del real, presupuesto y margen por negocio visible.
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-[1.5rem] border border-border bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="min-w-[1300px] text-sm">
-                <thead className="bg-[#44536c] text-white">
-                <tr>
-                  <th className="min-w-[220px] px-4 py-4 text-left text-sm font-semibold">Negocio</th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">
-                    {selectedYear === ALL_VALUE ? "Año anterior real" : `${Number(selectedYear) - 1} real`}
-                  </th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">
-                    {selectedYear === ALL_VALUE ? "Año actual ppto" : `${selectedYear} ppto`}
-                  </th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">
-                    {selectedYear === ALL_VALUE ? "Año actual real" : `${selectedYear} real`}
-                  </th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">Variación imp.</th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">% Variación</th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">% Logro ppto</th>
-                  <th className="min-w-[120px] px-4 py-4 text-right text-sm font-semibold">MB</th>
-                  <th className="min-w-[120px] px-4 py-4 text-right text-sm font-semibold">%MB</th>
-                </tr>
-              </thead>
-                <tbody className="bg-[#061018] text-white">
-                {byNegocio.length ? (
-                  byNegocio.map((row, index) => {
-                    const variationAmount = row.currentReal - row.previousReal;
-                    const variationPercent = calculateVariationPercent(row.currentReal, row.previousReal);
-                    const budgetAchievement = calculateBudgetAchievement(row.currentReal, row.currentBudget);
-                    const marginPercent = calculateMarginPercent(row.grossMargin, row.currentReal);
+        <main className="min-h-[600px]">
+          {activeTab === "insights" ? (
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+              <Card className="lg:col-span-8">
+                <div className="p-8 pb-0"><h3 className="text-xl font-bold text-white">Evolucion Comercial</h3><p className="text-sm text-slate-500">Volumen de ventas contra margen porcentual por periodo.</p></div>
+                <div className="h-[400px] w-full p-4">
+                  {metrics.evolution.length ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={metrics.evolution}><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={1} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.6} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} /><XAxis dataKey="name" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} /><YAxis yAxisId="left" stroke="#64748b" axisLine={false} tickLine={false} tickFormatter={(value) => formatCurrency(Number(value))} tick={{ fontSize: 12 }} /><YAxis yAxisId="right" orientation="right" stroke="#10b981" axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12 }} /><Tooltip content={<CustomTooltip />} /><Bar yAxisId="left" dataKey="ventas" name="Ventas" fill="url(#barGradient)" radius={[8, 8, 0, 0]} barSize={40} /><Line yAxisId="right" type="monotone" dataKey="margenPct" name="Margen %" stroke="#10b981" strokeWidth={4} dot={{ r: 6, fill: "#0f172a", strokeWidth: 3 }} /></ComposedChart></ResponsiveContainer> : <EmptyState>No hay datos para los filtros seleccionados.</EmptyState>}
+                </div>
+              </Card>
 
-                    return (
-                      <tr
-                        key={row.label}
-                        className={index % 2 === 0 ? "border-b border-white/8 bg-black/80" : "border-b border-white/8 bg-white/[0.03]"}
-                      >
-                        <td className="px-4 py-3.5 font-medium">{row.label}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(row.previousReal)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(row.currentBudget)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(row.currentReal)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(variationAmount)}</td>
-                        <td className="px-4 py-3.5 text-right">{formatPercent(variationPercent)}</td>
-                        <td className="px-4 py-3.5 text-right">{formatPercent(budgetAchievement)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">
-                          {row.grossMargin === null ? <EmptyCell value="-" /> : formatPen(row.grossMargin)}
-                        </td>
-                        <td className="px-4 py-3.5 text-right">{formatPercent(marginPercent)}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-sm text-white/70">
-                      No hay variaciones para los filtros seleccionados.
-                    </td>
-                  </tr>
-                )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              <Card className="lg:col-span-4">
+                <div className="p-8 pb-0 text-center"><h3 className="text-xl font-bold text-white">Share por Negocio</h3><p className="text-sm text-slate-500">Distribucion porcentual de ingresos.</p></div>
+                <div className="h-[350px] w-full">
+                  {metrics.business.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={metrics.business} innerRadius={80} outerRadius={110} paddingAngle={5} dataKey="ventas" nameKey="name">{metrics.business.map((entry, index) => <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart></ResponsiveContainer> : <EmptyState>No hay negocios visibles.</EmptyState>}
+                </div>
+                <div className="flex flex-wrap justify-center gap-4 p-6 pt-0">{metrics.business.map((business, index) => <div key={business.name} className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} /><span className="text-xs font-medium">{business.name}</span></div>)}</div>
+              </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <CardTitle>Variaciones por línea</CardTitle>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Desglose detallado por línea con participación de venta y margen.
-              </p>
+              <div className="grid grid-cols-1 gap-6 lg:col-span-12 md:grid-cols-3">
+                <Card className="border-l-4 border-l-blue-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-blue-500/10 p-3 text-blue-400"><Lightbulb size={24} /></div><div><h4 className="font-bold text-white">Lider de Ventas</h4><p className="mt-1 text-sm text-slate-400">{topSalesGroup?.name ?? "N/A"} concentra el mayor volumen.</p></div></div></Card>
+                <Card className="border-l-4 border-l-emerald-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-emerald-500/10 p-3 text-emerald-400"><TrendingUp size={24} /></div><div><h4 className="font-bold text-white">Top Eficiencia</h4><p className="mt-1 text-sm text-slate-400">{topMarginGroup?.name ?? "N/A"} tiene el mejor margen.</p></div></div></Card>
+                <Card className="border-l-4 border-l-amber-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-amber-500/10 p-3 text-amber-400"><AlertCircle size={24} /></div><div><h4 className="font-bold text-white">Promedio Global</h4><p className="mt-1 text-sm text-slate-400">El margen medio de la operacion es {formatPercent(metrics.avgMarginPct)}.</p></div></div></Card>
+              </div>
             </div>
-            <div className="rounded-2xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
-              Real visible <span className="font-semibold text-foreground">{formatCurrency(totals.currentReal)}</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-[1.5rem] border border-border bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="min-w-[1500px] text-sm">
-                <thead className="bg-[#44536c] text-white">
-                <tr>
-                  <th className="min-w-[220px] px-4 py-4 text-left text-sm font-semibold">Líneas</th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">
-                    {selectedYear === ALL_VALUE ? "Año anterior real" : `${Number(selectedYear) - 1} real`}
-                  </th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">
-                    {selectedYear === ALL_VALUE ? "Año actual ppto" : `${selectedYear} ppto`}
-                  </th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">
-                    {selectedYear === ALL_VALUE ? "Año actual real" : `${selectedYear} real`}
-                  </th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">Variación imp.</th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">% Variación</th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">% Part venta</th>
-                  <th className="min-w-[120px] px-4 py-4 text-right text-sm font-semibold">MB</th>
-                  <th className="min-w-[120px] px-4 py-4 text-right text-sm font-semibold">%MB</th>
-                  <th className="min-w-[140px] px-4 py-4 text-right text-sm font-semibold">% Part margen</th>
-                </tr>
-              </thead>
-                <tbody className="bg-[#061018] text-white">
-                {byLinea.length ? (
-                  byLinea.map((row, index) => {
-                    const variationAmount = row.currentReal - row.previousReal;
-                    const variationPercent = calculateVariationPercent(row.currentReal, row.previousReal);
-                    const salesShare = totalCurrentReal ? (row.currentReal / totalCurrentReal) * 100 : null;
-                    const marginPercent = calculateMarginPercent(row.grossMargin, row.currentReal);
-                    const totalGrossMargin = totals.grossMargin ?? 0;
-                    const marginShare =
-                      row.grossMargin !== null && totalGrossMargin
-                        ? (row.grossMargin / totalGrossMargin) * 100
-                        : null;
+          ) : null}
 
-                    return (
-                      <tr
-                        key={row.label}
-                        className={index % 2 === 0 ? "border-b border-white/8 bg-black/80" : "border-b border-white/8 bg-white/[0.03]"}
-                      >
-                        <td className="px-4 py-3.5 font-medium">{row.label}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(row.previousReal)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(row.currentBudget)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(row.currentReal)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">{formatPen(variationAmount)}</td>
-                        <td className="px-4 py-3.5 text-right">{formatPercent(variationPercent)}</td>
-                        <td className="px-4 py-3.5 text-right">{formatPercent(salesShare)}</td>
-                        <td className="px-4 py-3.5 text-right tabular-nums">
-                          {row.grossMargin === null ? <EmptyCell value="-" /> : formatPen(row.grossMargin)}
-                        </td>
-                        <td className="px-4 py-3.5 text-right">{formatPercent(marginPercent)}</td>
-                        <td className="px-4 py-3.5 text-right">{formatPercent(marginShare)}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-sm text-white/70">
-                      No hay líneas para mostrar con los filtros actuales.
-                    </td>
-                  </tr>
-                )}
-                </tbody>
-                <tfoot className="bg-[#d9d9d9] text-black">
-                  <tr>
-                    <td className="px-4 py-4 font-semibold">Total general</td>
-                    <td className="px-4 py-4 text-right font-semibold tabular-nums">{formatPen(totals.previousReal)}</td>
-                    <td className="px-4 py-4 text-right font-semibold tabular-nums">{formatPen(totals.currentBudget)}</td>
-                    <td className="px-4 py-4 text-right font-semibold tabular-nums">{formatPen(totals.currentReal)}</td>
-                    <td className="px-4 py-4 text-right font-semibold tabular-nums">
-                    {formatPen(totals.currentReal - totals.previousReal)}
-                  </td>
-                    <td className="px-4 py-4 text-right font-semibold">
-                    {formatPercent(calculateVariationPercent(totals.currentReal, totals.previousReal))}
-                  </td>
-                    <td className="px-4 py-4 text-right font-semibold">100%</td>
-                    <td className="px-4 py-4 text-right font-semibold tabular-nums">
-                    {totals.grossMargin === null ? "-" : formatPen(totals.grossMargin)}
-                  </td>
-                    <td className="px-4 py-4 text-right font-semibold">
-                    {formatPercent(calculateMarginPercent(totals.grossMargin, totals.currentReal))}
-                  </td>
-                    <td className="px-4 py-4 text-right font-semibold">
-                    {totals.grossMargin === null ? "-" : "100%"}
-                  </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          {activeTab === "matrix" ? (
+            <Card className="p-8">
+              <div className="mb-8"><h3 className="text-2xl font-bold text-white">Matriz de Segmentacion Estrategica</h3><p className="mt-2 text-slate-500">Correlacion entre volumen de ventas y rentabilidad.</p><div className="mt-4 flex flex-wrap gap-6"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-emerald-500" /><span className="text-xs">Sobre promedio</span></div><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-rose-500" /><span className="text-xs">Bajo promedio</span></div></div></div>
+              <div className="h-[500px] w-full">{metrics.groups.length ? <ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}><CartesianGrid strokeDasharray="3 3" stroke="#1e293b" /><XAxis type="number" dataKey="ventas" name="Ventas" stroke="#64748b" tickFormatter={(value) => formatCurrency(Number(value))} label={{ value: "Volumen de Ventas (PEN)", position: "bottom", offset: 20, fill: "#64748b", fontSize: 12 }} /><YAxis type="number" dataKey="margenPct" name="Margen %" stroke="#64748b" tickFormatter={(value) => `${value}%`} label={{ value: "Rentabilidad (%)", angle: -90, position: "left", fill: "#64748b", fontSize: 12 }} /><ZAxis type="number" dataKey="margen" range={[100, 1000]} /><Tooltip content={<CustomTooltip />} /><ReferenceLine y={metrics.avgMarginPct} stroke="#facc15" strokeDasharray="5 5" label={{ value: "M.B. Promedio", position: "insideBottomRight", fill: "#facc15", fontSize: 10 }} /><Scatter name="Grupos" data={metrics.groups}>{metrics.groups.map((entry) => <Cell key={entry.name} fill={entry.margenPct >= metrics.avgMarginPct ? "#10b981" : "#f43f5e"} fillOpacity={0.6} stroke={entry.margenPct >= metrics.avgMarginPct ? "#10b981" : "#f43f5e"} strokeWidth={2} />)}</Scatter></ScatterChart></ResponsiveContainer> : <EmptyState>No hay datos suficientes para la matriz.</EmptyState>}</div>
+            </Card>
+          ) : null}
+
+          {activeTab === "table" ? (
+            <Card className="overflow-hidden">
+              <div className="border-b border-slate-700 bg-slate-800/50 p-6"><h3 className="text-xl font-bold text-white">Analisis Detallado por Grupo</h3><p className="text-sm text-slate-500">Listado de rendimiento filtrado por criterios actuales.</p></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-900/80 text-xs font-bold uppercase tracking-widest text-slate-500"><tr><th className="px-8 py-5">Grupo</th><th className="px-8 py-5 text-right">Ventas</th><th className="px-8 py-5 text-right">Margen Bruto</th><th className="px-8 py-5 text-right">Margen %</th><th className="px-8 py-5 text-right">Status</th></tr></thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {metrics.groups.length ? metrics.groups.map((group) => {
+                      const isHighPerf = group.margenPct >= metrics.avgMarginPct;
+                      const isCritical = group.margenPct < 15;
+                      return <tr key={group.name} className="transition-colors hover:bg-white/5"><td className="px-8 py-5 font-bold text-white">{group.name}</td><td className="px-8 py-5 text-right tabular-nums">{formatFullCurrency(group.ventas)}</td><td className="px-8 py-5 text-right tabular-nums text-slate-400">{formatFullCurrency(group.margen)}</td><td className={`px-8 py-5 text-right tabular-nums font-bold ${isHighPerf ? "text-emerald-400" : "text-rose-400"}`}>{formatPercent(group.margenPct)}</td><td className="px-8 py-5 text-right"><span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${isCritical ? "bg-rose-500/10 text-rose-500" : isHighPerf ? "bg-emerald-500/10 text-emerald-500" : "bg-slate-500/10 text-slate-500"}`}>{isCritical ? "Critico" : isHighPerf ? "Eficiente" : "Regular"}</span></td></tr>;
+                    }) : <tr><td colSpan={5} className="px-8 py-12 text-center text-slate-500">No hay datos para mostrar.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : null}
+        </main>
+
+        <footer className="mt-12 text-center text-xs text-slate-600"><p>Datos procesados desde fuentes contables certificadas.</p></footer>
+      </div>
     </div>
   );
 }

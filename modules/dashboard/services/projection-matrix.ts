@@ -9,7 +9,7 @@ import {
   getPayloadEjecutivo,
   getPayloadNegocio,
   getPayloadPipeline,
-  getPayloadVentasMonto,
+  getPayloadPipelineMonto,
   getPayloadYear,
   isRecord,
   normalizeComparableText,
@@ -67,7 +67,9 @@ export async function getProjectionMatrixSummary(): Promise<ProjectionMatrixSumm
 
       const payload = rawRow.payload;
       const tipoPipeline = getPayloadPipeline(payload);
-      if (tipoPipeline !== "proyeccion") continue;
+      const pipelineMonto = getPayloadPipelineMonto(payload);
+
+      if (tipoPipeline === "backlog") continue;
 
       const negocio = getPayloadNegocio(payload);
       const importYear = getPayloadYear(payload.anio);
@@ -77,7 +79,7 @@ export async function getProjectionMatrixSummary(): Promise<ProjectionMatrixSumm
       const situacion = normalizeSituation(payload.situacion);
       const ejecutivo = getPayloadEjecutivo(payload);
       const monthIndex = parseMonthIndex(payload.mes);
-      const ventasMonto = getPayloadVentasMonto(payload);
+      const ventasMonto = pipelineMonto;
 
       if (ventasMonto === null) continue;
       if (importYear !== null) yearSet.add(importYear);

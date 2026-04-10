@@ -14,6 +14,7 @@ const MONTH_LABELS = [
   "Noviembre",
   "Diciembre",
 ] as const;
+const WITHOUT_MONTH_LABEL = "Sin mes";
 
 export type BacklogMatrixLine = {
   linea: string;
@@ -31,7 +32,11 @@ export function buildBacklogMatrix(
   });
 
   const lineMap = new Map<string, BacklogMatrixLine>();
-  const monthTotals = new Array<number>(12).fill(0);
+  const hasRowsWithoutMonth = filteredRows.some((row) => row.monthIndex === null);
+  const months = hasRowsWithoutMonth
+    ? [...MONTH_LABELS, WITHOUT_MONTH_LABEL]
+    : [...MONTH_LABELS];
+  const monthTotals = new Array<number>(months.length).fill(0);
 
   for (const row of filteredRows) {
     const linea = row.linea ?? "Sin linea";
@@ -39,13 +44,14 @@ export function buildBacklogMatrix(
       lineMap.get(linea) ??
       {
         linea,
-        months: new Array<number>(12).fill(0),
+        months: new Array<number>(months.length).fill(0),
         total: 0,
       };
+    const monthIndex = row.monthIndex ?? (hasRowsWithoutMonth ? MONTH_LABELS.length : null);
 
-    if (row.monthIndex !== null) {
-      current.months[row.monthIndex] += row.ventasMonto;
-      monthTotals[row.monthIndex] += row.ventasMonto;
+    if (monthIndex !== null) {
+      current.months[monthIndex] += row.ventasMonto;
+      monthTotals[monthIndex] += row.ventasMonto;
     }
 
     current.total += row.ventasMonto;
@@ -53,10 +59,10 @@ export function buildBacklogMatrix(
   }
 
   const lines = [...lineMap.values()].sort((a, b) => b.total - a.total);
-  const grandTotal = monthTotals.reduce((sum, value) => sum + value, 0);
+  const grandTotal = lines.reduce((sum, line) => sum + line.total, 0);
 
   return {
-    months: [...MONTH_LABELS],
+    months,
     lines,
     monthTotals,
     grandTotal,

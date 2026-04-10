@@ -38,6 +38,7 @@ export default async function SellerProjectionDetailPage({
       filters={{
         anio: getParam(query.anio),
         negocio: getParam(query.negocio),
+        etapa: getParam(query.etapa),
         situacion: getParam(query.situacion),
         ejecutivo: getParam(query.ejecutivo),
         linea: getParam(query.linea),

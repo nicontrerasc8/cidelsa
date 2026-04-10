@@ -9,7 +9,9 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AppRole, ImportFactRow, ImportRecord } from "@/lib/types/database";
 import {
+  importYearSchema,
   updateFactRowSchema,
+  updateImportSchema,
   validateImportFile,
 } from "@/lib/validators/imports";
 import { parseAxWorkbook } from "@/modules/imports/parser/excel";
@@ -50,7 +52,7 @@ export function canAccessImports(role: AppRole) {
 function normalizeImportRecord(row: RecentImportRow): ImportRecord {
   return {
     ...row,
-    anio: null,
+    anio: row.anio ?? null,
     uploaded_by_profile: row.profiles?.[0] ?? null,
   };
 }
@@ -273,6 +275,18 @@ function buildImportData(parsed: Awaited<ReturnType<typeof parseAxWorkbook>>) {
   } satisfies ImportJsonPayload;
 }
 
+function getImportYearFromData(data: ImportJsonPayload) {
+  for (const row of data.rows) {
+    const parsedYear = importYearSchema.safeParse(row.payload.anio);
+
+    if (parsedYear.success) {
+      return parsedYear.data;
+    }
+  }
+
+  return null;
+}
+
 function collectNormalizedRows(importId: string, data: ImportJsonPayload) {
   return data.rows
     .map((row) => ({
@@ -347,8 +361,13 @@ export async function createImportFromUpload(
   const parsed = await parseAxWorkbook(file);
   const storagePath = buildImportSourceRef(file.name, currentUser.id);
   const importData = buildImportData(parsed);
+  const importYear = getImportYearFromData(importData);
   const validRows = importData.audit.validRows;
   const errorRows = importData.audit.invalidRows;
+
+  if (importYear === null) {
+    throw new Error("No se encontro un año valido en la columna año del Excel.");
+  }
 
   console.groupCollapsed("[imports][service] Resumen de importacion");
   console.log("archivo", file.name);
@@ -371,7 +390,7 @@ export async function createImportFromUpload(
     .insert({
       file_name: file.name,
       storage_path: storagePath,
-      anio: null,
+      anio: importYear,
       uploaded_by: currentUser.id,
       status: "processing",
       total_rows: parsed.parsedRows.length,
@@ -385,7 +404,8 @@ export async function createImportFromUpload(
     .single();
 
   if (importError || !importRow) {
-    throw new Error("No se pudo registrar la importacion.");
+    console.error("[imports][service] Error al registrar importacion", importError);
+    throw new Error(importError?.message ?? "No se pudo registrar la importacion.");
   }
 
   const importId = importRow.id as string;
@@ -406,6 +426,7 @@ export async function createImportFromUpload(
     .eq("id", importId);
 
   if (updateError) {
+    console.error("[imports][service] Error al guardar JSON de importacion", updateError);
     await admin
       .from("imports")
       .update({
@@ -424,7 +445,7 @@ export async function createImportFromUpload(
   return {
     id: importId,
     fileName: file.name,
-    importYear: null,
+    importYear,
     sheetName: parsed.sheetName,
     columns: parsed.columns,
     previewRows: buildPreviewRows(importId, importData),
@@ -476,13 +497,17 @@ export async function getImportDetail(importId: string) {
   };
 }
 
-export async function updateImportMetadata(importId: string) {
+export async function updateImportMetadata(
+  importId: string,
+  input: { anio: number },
+) {
   await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
+  const parsed = updateImportSchema.parse(input);
 
   const admin = createAdminSupabaseClient();
   const { error } = await admin
     .from("imports")
-    .update({ anio: null })
+    .update({ anio: parsed.anio })
     .eq("id", importId);
 
   if (error) {

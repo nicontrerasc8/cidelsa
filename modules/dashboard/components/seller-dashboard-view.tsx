@@ -31,7 +31,7 @@ export function SellerDashboardView({
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/75">
           <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1">
-            {summary.years.length ? `${summary.years.length} anos visibles` : "Sin anos visibles"}
+            {summary.years.length ? `${summary.years.length} años visibles` : "Sin años visibles"}
           </span>
           <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1">
             {summary.negocios.length ? `${summary.negocios.length} negocios` : "Sin negocios"}
@@ -61,7 +61,7 @@ export function SellerDashboardView({
                   <TableHeaderCell>Cliente</TableHeaderCell>
                   <TableHeaderCell>Negocio</TableHeaderCell>
                   <TableHeaderCell>Linea</TableHeaderCell>
-                  <TableHeaderCell>Ano</TableHeaderCell>
+                  <TableHeaderCell>año</TableHeaderCell>
                   <TableHeaderCell>Situacion</TableHeaderCell>
                   <TableHeaderCell>Fecha facturacion</TableHeaderCell>
                   <TableHeaderCell className="text-right">Ventas</TableHeaderCell>

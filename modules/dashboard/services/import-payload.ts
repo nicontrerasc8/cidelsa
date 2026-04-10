@@ -118,6 +118,14 @@ export function getPayloadVentasMonto(payload: Record<string, unknown>) {
   return normalizeNumber(payload.ventas_monto) ?? normalizeNumber(payload.observaciones);
 }
 
+export function getPayloadPipelineMonto(payload: Record<string, unknown>) {
+  return (
+    normalizeNumber(payload.proyeccion_monto) ??
+    normalizeNumber(payload.ventas_monto) ??
+    normalizeNumber(payload.observaciones)
+  );
+}
+
 export function getPayloadCliente(payload: Record<string, unknown>) {
   return (
     normalizeText(payload.cliente) ??
@@ -136,11 +144,34 @@ export function getPayloadEjecutivo(payload: Record<string, unknown>) {
 }
 
 export function getPayloadPipeline(payload: Record<string, unknown>) {
-  return (
+  const explicitPipeline =
     normalizePipeline(payload.tipo_pipeline) ??
     normalizePipeline(payload.probabilidad_num) ??
-    normalizePipeline(payload.pipeline)
-  );
+    normalizePipeline(payload.pipeline);
+
+  if (explicitPipeline?.includes("backlog")) {
+    return "backlog";
+  }
+
+  if (explicitPipeline?.includes("proye") || explicitPipeline?.includes("pipeline")) {
+    return "proyeccion";
+  }
+
+  if (explicitPipeline?.includes("factur")) {
+    return "facturacion";
+  }
+
+  const situation = normalizeSituation(payload.situacion);
+
+  if (situation?.includes("backlog")) {
+    return "backlog";
+  }
+
+  if (hasFacturacion(payload)) {
+    return "facturacion";
+  }
+
+  return "proyeccion";
 }
 
 export function hasFacturacion(payload: Record<string, unknown>) {

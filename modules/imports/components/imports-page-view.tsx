@@ -40,33 +40,14 @@ const statusVariantMap = {
 
 const PREVIEW_PAGE_SIZE = 10;
 
-const ACCOUNTING_BUSINESS_OPTIONS = [
-  { label: "Industrial", value: "Industrial" },
-  { label: "Geosinteticos", value: "Geosinteticos" },
-  { label: "Tensoestructuras", value: "Tensoestructuras" },
-] as const;
-
-const ACCOUNTING_PERIOD_OPTIONS = [
-  { label: "Enero", value: "Enero" },
-  { label: "Febrero", value: "Febrero" },
-  { label: "Marzo", value: "Marzo" },
-  { label: "Abril", value: "Abril" },
-  { label: "Mayo", value: "Mayo" },
-  { label: "Junio", value: "Junio" },
-  { label: "Julio", value: "Julio" },
-  { label: "Agosto", value: "Agosto" },
-  { label: "Setiembre", value: "Setiembre" },
-  { label: "Octubre", value: "Octubre" },
-  { label: "Noviembre", value: "Noviembre" },
-  { label: "Diciembre", value: "Diciembre" },
-] as const;
-
 interface UploadResponse {
   fileName: string;
   importYear: number | null;
   sheetName: string;
   columns: string[];
   previewRows: Record<string, unknown>[];
+  rowsBelowSections?: Record<string, Record<string, unknown>[]>;
+  monthlyRowsBySection?: Record<string, Record<string, unknown>[]>;
   totalRows: number;
   validRows: number;
   errorRows: number;
@@ -88,6 +69,78 @@ const MONTH_LABELS = [
   "Diciembre",
 ] as const;
 
+const ACCOUNTING_MONTHLY_PREVIEW_COLUMNS = [
+  { key: "negocio", label: "Negocio" },
+  { key: "linea", label: "Línea" },
+  { key: "enero_ventas", label: "Enero ventas" },
+  { key: "enero_margen_bruto", label: "Enero margen bruto" },
+  { key: "febrero_ventas", label: "Febrero ventas" },
+  { key: "febrero_margen_bruto", label: "Febrero margen bruto" },
+  { key: "marzo_ventas", label: "Marzo ventas" },
+  { key: "marzo_margen_bruto", label: "Marzo margen bruto" },
+  { key: "abril_ventas", label: "Abril ventas" },
+  { key: "abril_margen_bruto", label: "Abril margen bruto" },
+  { key: "mayo_ventas", label: "Mayo ventas" },
+  { key: "mayo_margen_bruto", label: "Mayo margen bruto" },
+  { key: "junio_ventas", label: "Junio ventas" },
+  { key: "junio_margen_bruto", label: "Junio margen bruto" },
+  { key: "julio_ventas", label: "Julio ventas" },
+  { key: "julio_margen_bruto", label: "Julio margen bruto" },
+  { key: "agosto_ventas", label: "Agosto ventas" },
+  { key: "agosto_margen_bruto", label: "Agosto margen bruto" },
+  { key: "setiembre_ventas", label: "Setiembre ventas" },
+  { key: "setiembre_margen_bruto", label: "Setiembre margen bruto" },
+  { key: "octubre_ventas", label: "Octubre ventas" },
+  { key: "octubre_margen_bruto", label: "Octubre margen bruto" },
+  { key: "noviembre_ventas", label: "Noviembre ventas" },
+  { key: "noviembre_margen_bruto", label: "Noviembre margen bruto" },
+  { key: "diciembre_ventas", label: "Diciembre ventas" },
+  { key: "diciembre_margen_bruto", label: "Diciembre margen bruto" },
+] as const;
+
+const ACCOUNTING_GROUP_OPTIONS_BY_SECTION = {
+  Comercial: [
+    "Gaviones",
+    "Geoestructuras",
+    "Geomembranas",
+    "Tuberias",
+    "Otros - Geoestructuras",
+  ],
+  Industrial: [
+    "Albergues",
+    "Mangas",
+    "Almacenes",
+    "Otros - industrial",
+  ],
+} as const;
+
+type AccountingSectionTitle = keyof typeof ACCOUNTING_GROUP_OPTIONS_BY_SECTION;
+
+const DEFAULT_ACCOUNTING_GROUP_BY_SECTION = {
+  Comercial: "Otros - Geoestructuras",
+  Industrial: "Otros - industrial",
+} as const satisfies Record<AccountingSectionTitle, string>;
+
+const ACCOUNTING_BUSINESS_BY_SECTION = {
+  Comercial: "Geosinteticos",
+  Industrial: "Industrial",
+} as const satisfies Record<AccountingSectionTitle, string>;
+
+function buildAccountingGroupSelectionKey(
+  section: AccountingSectionTitle,
+  row: Record<string, unknown>,
+) {
+  return `${section}:${String(row.fila_excel ?? row.linea ?? "")}`;
+}
+
+function getDefaultAccountingGroup(section: AccountingSectionTitle) {
+  return DEFAULT_ACCOUNTING_GROUP_BY_SECTION[section];
+}
+
+function getAccountingBusiness(section: AccountingSectionTitle) {
+  return ACCOUNTING_BUSINESS_BY_SECTION[section];
+}
+
 function normalizePreviewColumnKey(header: string) {
   const normalized = header
     .normalize("NFD")
@@ -98,13 +151,17 @@ function normalizePreviewColumnKey(header: string) {
 
   const aliases: Record<string, string> = {
     ano: "anio",
+    estado: "situacion",
     situacion: "situacion",
     mes: "mes",
     semana: "semana",
     "fecha registro": "fecha_registro",
     "fecha de registro": "fecha_registro",
+    "fecha ingreso": "fecha_registro",
+    "fecha de ingreso": "fecha_registro",
     "fecha adjudicacion": "fecha_adjudicacion",
     "fecha de adjudicacion": "fecha_adjudicacion",
+    "fecha factura": "fecha_facturacion",
     "fecha facturacion": "fecha_facturacion",
     "fecha de facturacion": "fecha_facturacion",
     "orden venta": "orden_venta",
@@ -168,9 +225,22 @@ function formatPreviewCell(value: unknown, columnKey?: string) {
   ) {
     return MONTH_LABELS[value] ?? String(value);
   }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const normalizedDecimal = trimmed.replace(",", ".");
+
+    if (/^-?\d+[,.]\d+$/.test(trimmed)) {
+      const parsed = Number(normalizedDecimal);
+      return Number.isFinite(parsed) ? parsed.toFixed(2) : trimmed;
+    }
+
+    return value;
+  }
   if (
-    typeof value === "string" ||
-    typeof value === "number" ||
     typeof value === "boolean"
   ) {
     return String(value);
@@ -254,6 +324,104 @@ function TopScrollSync({
   );
 }
 
+function AccountingMonthlyPreviewTable({
+  title,
+  rows,
+  groupSelections,
+  onGroupChange,
+}: {
+  title: AccountingSectionTitle;
+  rows: Record<string, unknown>[];
+  groupSelections: Record<string, string>;
+  onGroupChange: (
+    section: AccountingSectionTitle,
+    row: Record<string, unknown>,
+    group: string,
+  ) => void;
+}) {
+  const groupOptions = ACCOUNTING_GROUP_OPTIONS_BY_SECTION[title];
+
+  return (
+    <div className="space-y-3 rounded-3xl border border-border/70 bg-background/80 p-3 shadow-sm">
+      <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h4 className="font-medium">{title}</h4>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {rows.length} filas detectadas debajo de {title}.
+          </p>
+        </div>
+      </div>
+      {rows.length ? (
+        <TopScrollSync minWidthClassName="min-w-max">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/60">
+              <tr className="border-b">
+                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
+                  Grupo
+                </th>
+                {ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.map((column) => (
+                  <th
+                    key={column.key}
+                    className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap"
+                  >
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr
+                  key={`${title}-${rowIndex}`}
+                  className="border-b align-top last:border-b-0 odd:bg-background even:bg-muted/10"
+                >
+                  <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
+                    <select
+                      data-loading-overlay-ignore="true"
+                      className="h-10 min-w-52 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                      value={
+                        groupSelections[
+                          buildAccountingGroupSelectionKey(title, row)
+                        ] ?? getDefaultAccountingGroup(title)
+                      }
+                      onChange={(event) =>
+                        onGroupChange(title, row, event.target.value)
+                      }
+                    >
+                      <option value="">Seleccionar grupo</option>
+                      {groupOptions.map((group) => (
+                        <option key={group} value={group}>
+                          {group}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  {ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.map((column) => (
+                    <td
+                      key={`${title}-${rowIndex}-${column.key}`}
+                      className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap"
+                    >
+                      <div className="whitespace-pre-wrap">
+                        {formatPreviewCell(row[column.key], column.key) || (
+                          <span className="text-muted-foreground/60">-</span>
+                        )}
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TopScrollSync>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+          No se detectaron filas para esta sección.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ImportUploadCard({
   title,
   eyebrow,
@@ -271,9 +439,9 @@ function ImportUploadCard({
   title: string;
   eyebrow: string;
   description: string;
-  templateHref: string;
+  templateHref?: string;
   uploadEndpoint: string;
-  templateLabel: string;
+  templateLabel?: string;
   successMessage: string;
   consoleLabel: string;
   accentClassName: string;
@@ -297,6 +465,10 @@ function ImportUploadCard({
   const [preview, setPreview] = useState<UploadResponse | null>(null);
   const [previewPage, setPreviewPage] = useState(1);
   const [isPending, startTransition] = useTransition();
+  const [isSavingAccounting, startSavingAccounting] = useTransition();
+  const [accountingGroupSelections, setAccountingGroupSelections] = useState<
+    Record<string, string>
+  >({});
 
   const previewColumns = useMemo(() => {
     if (!preview) return [];
@@ -331,6 +503,30 @@ function ImportUploadCard({
     const start = (previewPage - 1) * PREVIEW_PAGE_SIZE;
     return preview.previewRows.slice(start, start + PREVIEW_PAGE_SIZE);
   }, [preview, previewPage]);
+  const comercialMonthlyPreviewRows =
+    preview?.monthlyRowsBySection?.Comercial ?? [];
+  const industrialMonthlyPreviewRows =
+    preview?.monthlyRowsBySection?.Industrial ?? [];
+  const hasAccountingMonthlyPreview =
+    Boolean(preview?.monthlyRowsBySection);
+  const accountingMonthlyPreviewRows = [
+    ...comercialMonthlyPreviewRows.map((row) => ({
+      section: "Comercial" as const,
+      row,
+    })),
+    ...industrialMonthlyPreviewRows.map((row) => ({
+      section: "Industrial" as const,
+      row,
+    })),
+  ];
+  const accountingMonthlyPreviewRowCount = accountingMonthlyPreviewRows.length;
+  const missingAccountingGroups = accountingMonthlyPreviewRows.filter(
+    ({ section, row }) =>
+      !(
+        accountingGroupSelections[buildAccountingGroupSelectionKey(section, row)] ??
+        getDefaultAccountingGroup(section)
+      ),
+  ).length;
 
   const previewRangeStart = preview?.previewRows.length
     ? (previewPage - 1) * PREVIEW_PAGE_SIZE + 1
@@ -397,20 +593,128 @@ function ImportUploadCard({
         console.log("payload", payload);
         console.log("columnas", payload.columns);
         console.log(
-          "primeras_10_filas_guardadas",
+          "primeras_10_filas_leidas",
           payload.previewRows.slice(0, 10),
         );
+        if (payload.rowsBelowSections) {
+          console.log(
+            "filas_debajo_de_comercial",
+            payload.rowsBelowSections.Comercial ?? [],
+          );
+          console.table(payload.rowsBelowSections.Comercial ?? []);
+          console.log(
+            "filas_debajo_de_industrial",
+            payload.rowsBelowSections.Industrial ?? [],
+          );
+          console.table(payload.rowsBelowSections.Industrial ?? []);
+        }
+        if (payload.monthlyRowsBySection) {
+          console.log(
+            "filas_mensuales_comercial",
+            payload.monthlyRowsBySection.Comercial ?? [],
+          );
+          console.table(payload.monthlyRowsBySection.Comercial ?? []);
+          console.log(
+            "filas_mensuales_industrial",
+            payload.monthlyRowsBySection.Industrial ?? [],
+          );
+          console.table(payload.monthlyRowsBySection.Industrial ?? []);
+        }
         console.table(payload.previewRows.slice(0, 10));
         console.table(payload.previewRows);
         console.groupEnd();
 
         setPreview(payload);
+        setAccountingGroupSelections({});
         setPreviewPage(1);
         router.refresh();
         toast.success(successMessage);
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "Error durante la importación.",
+        );
+      }
+    });
+  }
+
+  function handleAccountingGroupChange(
+    section: AccountingSectionTitle,
+    row: Record<string, unknown>,
+    group: string,
+  ) {
+    setAccountingGroupSelections((current) => ({
+      ...current,
+      [buildAccountingGroupSelectionKey(section, row)]: group,
+    }));
+  }
+
+  function buildRowsWithAccountingGroups(
+    section: AccountingSectionTitle,
+    rows: Record<string, unknown>[],
+  ) {
+    return rows.map((row) => ({
+      ...row,
+      negocio: getAccountingBusiness(section),
+      grupo: accountingGroupSelections[
+        buildAccountingGroupSelectionKey(section, row)
+      ] ?? getDefaultAccountingGroup(section),
+    }));
+  }
+
+  function handleSaveAccountingPreview() {
+    if (!preview?.monthlyRowsBySection) return;
+
+    if (accountingMonthlyPreviewRowCount === 0) {
+      toast.error("No hay filas contables para guardar.");
+      return;
+    }
+
+    if (typeof preview.importYear !== "number") {
+      toast.error("El año de carga no es valido.");
+      return;
+    }
+
+    if (missingAccountingGroups > 0) {
+      toast.error("Selecciona un grupo para cada fila antes de guardar.");
+      return;
+    }
+
+    startSavingAccounting(async () => {
+      try {
+        const response = await fetch(uploadEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: preview.fileName,
+            importYear: preview.importYear,
+            sheetName: preview.sheetName,
+            monthlyRowsBySection: {
+              Comercial: buildRowsWithAccountingGroups(
+                "Comercial",
+                comercialMonthlyPreviewRows,
+              ),
+              Industrial: buildRowsWithAccountingGroups(
+                "Industrial",
+                industrialMonthlyPreviewRows,
+              ),
+            },
+          }),
+        });
+        const payload = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? "No se pudo guardar la contabilidad.");
+        }
+
+        router.refresh();
+        toast.success("Importación contable guardada.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar la contabilidad.",
         );
       }
     });
@@ -430,16 +734,18 @@ function ImportUploadCard({
               {description}
             </p>
           </div>
-          <Link
-            href={templateHref}
-            className={cn(
-              buttonVariants({ variant: "secondary" }),
-              "flex h-12 w-full items-center justify-center gap-2 rounded-2xl border-border/70 bg-background/80 px-6 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:bg-background sm:w-auto sm:min-w-[240px]",
-            )}
-          >
-            <Download className="size-4" />
-            {templateLabel}
-          </Link>
+          {templateHref && templateLabel ? (
+            <Link
+              href={templateHref}
+              className={cn(
+                buttonVariants({ variant: "secondary" }),
+                "flex h-12 w-full items-center justify-center gap-2 rounded-2xl border-border/70 bg-background/80 px-6 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:bg-background sm:w-auto sm:min-w-[240px]",
+              )}
+            >
+              <Download className="size-4" />
+              {templateLabel}
+            </Link>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -558,7 +864,7 @@ function ImportUploadCard({
             <div className="space-y-1">
               <p className="text-sm font-medium">Resumen de la última carga</p>
               <p className="text-xs text-muted-foreground">
-                La tabla inferior muestra el payload tal como entra desde el Excel y se guarda en JSON.
+                La tabla inferior muestra el payload tal como entra desde el Excel.
               </p>
             </div>
 
@@ -632,10 +938,20 @@ function ImportUploadCard({
             <div>
               <h3 className="font-medium">Preview del payload</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Se muestran las filas tal como llegan del Excel y se guardan en JSON. Los valores nulos se ven en blanco.
+                {preview?.monthlyRowsBySection
+                  ? "Se muestran las líneas de Comercial e Industrial con ventas y margen bruto por mes."
+                  : "Se muestran las filas tal como llegan del Excel. Los valores nulos se ven en blanco."}
               </p>
             </div>
-            {preview?.previewRows.length ? (
+            {hasAccountingMonthlyPreview ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <span>Comercial: {comercialMonthlyPreviewRows.length} filas</span>
+                <span className="hidden sm:inline">|</span>
+                <span>Industrial: {industrialMonthlyPreviewRows.length} filas</span>
+                <span className="hidden sm:inline">|</span>
+                <span>{ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.length} columnas visibles</span>
+              </div>
+            ) : preview?.previewRows.length ? (
               <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <span>
                   Mostrando {previewRangeStart}-{previewRangeEnd} de {preview.previewRows.length}
@@ -646,7 +962,46 @@ function ImportUploadCard({
             ) : null}
           </div>
 
-          {preview?.previewRows.length ? (
+          {hasAccountingMonthlyPreview ? (
+            <div className="space-y-4">
+              <AccountingMonthlyPreviewTable
+                title="Comercial"
+                rows={comercialMonthlyPreviewRows}
+                groupSelections={accountingGroupSelections}
+                onGroupChange={handleAccountingGroupChange}
+              />
+              <AccountingMonthlyPreviewTable
+                title="Industrial"
+                rows={industrialMonthlyPreviewRows}
+                groupSelections={accountingGroupSelections}
+                onGroupChange={handleAccountingGroupChange}
+              />
+              <div className="flex flex-col gap-3 rounded-3xl border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {missingAccountingGroups > 0
+                    ? `Faltan ${missingAccountingGroups} grupos por seleccionar.`
+                    : "Todas las filas tienen grupo asignado."}
+                </p>
+                <Button
+                  type="button"
+                  className="h-11 rounded-2xl bg-slate-900 px-5 text-white hover:bg-slate-800"
+                  disabled={
+                    isSavingAccounting ||
+                    accountingMonthlyPreviewRowCount === 0 ||
+                    missingAccountingGroups > 0
+                  }
+                  onClick={handleSaveAccountingPreview}
+                >
+                  {isSavingAccounting ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <UploadCloud className="size-4" />
+                  )}
+                  Guardar contabilidad
+                </Button>
+              </div>
+            </div>
+          ) : preview?.previewRows.length ? (
             <div className="space-y-3 rounded-3xl border border-border/70 bg-background/80 p-3 shadow-sm">
               <TopScrollSync minWidthClassName="min-w-max">
                 <table className="w-full text-sm">
@@ -888,7 +1243,7 @@ export function ImportsPageView({
             Flujo de carga
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Gestiona dos cargas independientes: AX comercial y contabilidad. Ambas se leen desde Excel y se guardan como JSON crudo para auditoría y dashboards posteriores.
+            Gestiona dos cargas independientes: AX comercial se conserva para auditoría, y contabilidad queda en modo revisión para leer el Excel y revisar marcas desde consola.
           </p>
         </div>
       </section>
@@ -909,15 +1264,11 @@ export function ImportsPageView({
         <ImportUploadCard
           title="Subir Excel de contabilidad"
           eyebrow="Cargas contables"
-          description="Carga financiera paralela. Lee las columnas Línea, Año anterior real, Año actual presupuesto, Año actual real y MB desde la fila 2, y las guarda tal cual en JSON."
-          templateHref="/api/accounting-imports/template"
+          description="Carga contable temporal para revisar el archivo completo: lee todas las filas y marca cuando la columna A coincide con 1. TENSOESTRUCTURA, Geosinteticos o Industrial."
           uploadEndpoint="/api/accounting-imports"
-          templateLabel="Descargar plantilla contable"
-          successMessage="Importación contable procesada correctamente."
+          successMessage="Excel contable leído correctamente. Revisa la consola para ver las filas."
           consoleLabel="[accounting-imports] Excel cargado"
           accentClassName="bg-[linear-gradient(90deg,#17456d_0%,#2d7f73_100%)]"
-          businessOptions={ACCOUNTING_BUSINESS_OPTIONS}
-          periodOptions={ACCOUNTING_PERIOD_OPTIONS}
         />
       </div>
 

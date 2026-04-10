@@ -12,7 +12,11 @@ import {
   updateImportSchema,
   validateImportFile,
 } from "@/lib/validators/imports";
-import { parseAccountingWorkbook } from "@/modules/imports/parser/accounting";
+import {
+  parseAccountingWorkbook,
+  type AccountingMonthlySectionRow,
+  type ParsedAccountingRow,
+} from "@/modules/imports/parser/accounting";
 import {
   buildImportAudit,
   parseImportAudit,
@@ -40,6 +44,22 @@ type AccountingImportJsonPayload = {
   audit: ImportAudit;
 };
 
+type AccountingSection = "Comercial" | "Industrial";
+
+type AccountingPreviewSaveRow = Record<string, unknown> & {
+  fila_excel?: unknown;
+  linea?: unknown;
+  negocio?: unknown;
+  grupo?: unknown;
+};
+
+type AccountingPreviewSaveInput = {
+  fileName: string;
+  importYear: number;
+  sheetName: string;
+  monthlyRowsBySection: Partial<Record<AccountingSection, AccountingPreviewSaveRow[]>>;
+};
+
 export type AccountingImportRow = {
   id: number;
   row_number: number;
@@ -58,68 +78,21 @@ export type AccountingImportRow = {
   };
 };
 
-const ACCOUNTING_BUSINESSES = [
-  "Industrial",
-  "Geosinteticos",
-  "Tensoestructuras",
-] as const;
-
-const ACCOUNTING_PERIODS = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Setiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-] as const;
-
-function normalizeAccountingBusiness(value: string) {
-  const normalized = value.trim();
-
-  if (!ACCOUNTING_BUSINESSES.includes(normalized as (typeof ACCOUNTING_BUSINESSES)[number])) {
-    throw new Error("Debes seleccionar un negocio contable valido.");
-  }
-
-  return normalized;
-}
-
-function normalizeAccountingPeriod(value: string) {
-  const normalized = value.trim();
-
-  if (!ACCOUNTING_PERIODS.includes(normalized as (typeof ACCOUNTING_PERIODS)[number])) {
-    throw new Error("Debes seleccionar un periodo contable valido.");
-  }
-
-  return normalized;
-}
-
-function buildAccountingPeriodLabel(periodoDesde: string, periodoHasta: string) {
-  if (periodoDesde === periodoHasta) return periodoDesde;
-  return `${periodoDesde} a ${periodoHasta}`;
-}
-
-function normalizeAccountingPeriodRange(desdeRaw: string, hastaRaw: string) {
-  const periodoDesde = normalizeAccountingPeriod(desdeRaw);
-  const periodoHasta = normalizeAccountingPeriod(hastaRaw);
-  const desdeIndex = ACCOUNTING_PERIODS.indexOf(periodoDesde as (typeof ACCOUNTING_PERIODS)[number]);
-  const hastaIndex = ACCOUNTING_PERIODS.indexOf(periodoHasta as (typeof ACCOUNTING_PERIODS)[number]);
-
-  if (desdeIndex > hastaIndex) {
-    throw new Error("El periodo inicial no puede ser mayor que el periodo final.");
-  }
-
-  return {
-    periodoDesde,
-    periodoHasta,
-    periodo: buildAccountingPeriodLabel(periodoDesde, periodoHasta),
-  };
-}
+const ACCOUNTING_GROUPS_BY_SECTION = {
+  Comercial: [
+    "Gaviones",
+    "Geoestructuras",
+    "Geomembranas",
+    "Tuberias",
+    "Otros - Geoestructuras",
+  ],
+  Industrial: [
+    "Albergues",
+    "Mangas",
+    "Almacenes",
+    "Otros - industrial",
+  ],
+} as const;
 
 function normalizeImportRecord(row: RecentAccountingImportRow): ImportRecord {
   return {
@@ -150,6 +123,25 @@ function toNullableString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
+function assertAccountingGroup(section: AccountingSection, value: unknown) {
+  if (typeof value !== "string") {
+    throw new Error("Debes seleccionar un grupo para cada fila contable.");
+  }
+
+  const normalized = value.trim();
+  const allowedGroups = ACCOUNTING_GROUPS_BY_SECTION[section] as readonly string[];
+
+  if (!allowedGroups.includes(normalized)) {
+    throw new Error(`El grupo "${normalized}" no es valido para ${section}.`);
+  }
+
+  return normalized;
+}
+
+function getAccountingBusinessFromSection(section: AccountingSection) {
+  return section === "Comercial" ? "Geosinteticos" : "Industrial";
+}
+
 function normalizeAccountingImportRow(row: AccountingImportJsonRow): AccountingImportRow {
   return {
     id: row.id,
@@ -170,35 +162,18 @@ function normalizeAccountingImportRow(row: AccountingImportJsonRow): AccountingI
   };
 }
 
-function buildImportSourceRef(fileName: string, userId: string) {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const normalizedFileName = fileName.replace(/[^a-zA-Z0-9._-]+/g, "-");
-
-  return `inline://accounting/${userId}/${timestamp}-${normalizedFileName}`;
-}
-
-function buildImportData(
-  parsed: Awaited<ReturnType<typeof parseAccountingWorkbook>>,
-  negocio: string,
-  periodoRange: { periodo: string; periodoDesde: string; periodoHasta: string },
-) {
+function buildImportData(parsed: Awaited<ReturnType<typeof parseAccountingWorkbook>>) {
   const rows = parsed.parsedRows.map((row) => ({
     id: row.rowNumber,
     row_number: row.rowNumber,
     parse_status: row.parseStatus,
     parse_errors: row.parseErrors,
-    payload: {
-      ...row.payload,
-      negocio,
-      periodo_desde: periodoRange.periodoDesde,
-      periodo_hasta: periodoRange.periodoHasta,
-      periodo: periodoRange.periodo,
-    },
+    payload: row.payload,
   })) satisfies AccountingImportJsonRow[];
 
   return {
     sheetName: parsed.sheetName,
-    columns: [...parsed.columns, "negocio", "periodo_desde", "periodo_hasta", "periodo"],
+    columns: parsed.columns,
     rows,
     audit: buildImportAudit({
       rows,
@@ -216,6 +191,52 @@ function buildPreviewRows(data: AccountingImportJsonPayload) {
     parse_status: row.parse_status,
     ...row.payload,
   }));
+}
+
+function buildRowsBelowSectionPreview(rows: ParsedAccountingRow[]) {
+  return rows.map((row) => ({
+    fila_excel: row.rowNumber,
+    parse_status: row.parseStatus,
+    ...row.payload,
+  }));
+}
+
+function flattenMonthlySectionRows(rows: AccountingMonthlySectionRow[]) {
+  return rows.map((row) => ({
+    fila_excel: row.fila_excel,
+    linea: row.linea,
+    enero_ventas: row.meses.enero.ventas,
+    enero_margen_bruto: row.meses.enero.margen_bruto,
+    febrero_ventas: row.meses.febrero.ventas,
+    febrero_margen_bruto: row.meses.febrero.margen_bruto,
+    marzo_ventas: row.meses.marzo.ventas,
+    marzo_margen_bruto: row.meses.marzo.margen_bruto,
+    abril_ventas: row.meses.abril.ventas,
+    abril_margen_bruto: row.meses.abril.margen_bruto,
+    mayo_ventas: row.meses.mayo.ventas,
+    mayo_margen_bruto: row.meses.mayo.margen_bruto,
+    junio_ventas: row.meses.junio.ventas,
+    junio_margen_bruto: row.meses.junio.margen_bruto,
+    julio_ventas: row.meses.julio.ventas,
+    julio_margen_bruto: row.meses.julio.margen_bruto,
+    agosto_ventas: row.meses.agosto.ventas,
+    agosto_margen_bruto: row.meses.agosto.margen_bruto,
+    setiembre_ventas: row.meses.setiembre.ventas,
+    setiembre_margen_bruto: row.meses.setiembre.margen_bruto,
+    octubre_ventas: row.meses.octubre.ventas,
+    octubre_margen_bruto: row.meses.octubre.margen_bruto,
+    noviembre_ventas: row.meses.noviembre.ventas,
+    noviembre_margen_bruto: row.meses.noviembre.margen_bruto,
+    diciembre_ventas: row.meses.diciembre.ventas,
+    diciembre_margen_bruto: row.meses.diciembre.margen_bruto,
+  }));
+}
+
+function buildImportSourceRef(fileName: string, userId: string) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const normalizedFileName = fileName.replace(/[^a-zA-Z0-9._-]+/g, "-");
+
+  return `inline://accounting/${userId}/${timestamp}-${normalizedFileName}`;
 }
 
 function parseAccountingImportData(value: unknown): AccountingImportJsonPayload {
@@ -296,26 +317,45 @@ export async function createAccountingImportFromUpload(
   file: File,
   currentUser: CurrentUser,
   importYear: number,
-  negocioRaw: string,
-  periodoDesdeRaw: string,
-  periodoHastaRaw: string,
 ) {
-  const admin = createAdminSupabaseClient();
   validateImportFile(file);
   const parsed = await parseAccountingWorkbook(file);
-  const negocio = normalizeAccountingBusiness(negocioRaw);
-  const periodoRange = normalizeAccountingPeriodRange(periodoDesdeRaw, periodoHastaRaw);
-  const storagePath = buildImportSourceRef(file.name, currentUser.id);
-  const importData = buildImportData(parsed, negocio, periodoRange);
+  const importData = buildImportData(parsed);
 
-  console.groupCollapsed("[accounting-imports][service] Resumen de importacion");
+  console.groupCollapsed("[accounting-imports][service] Excel contable leido");
   console.log("archivo", file.name);
   console.log("usuario", currentUser.id);
   console.log("anio_importacion", importYear);
-  console.log("negocio", negocio);
-  console.log("periodo", periodoRange.periodo);
   console.log("hoja", parsed.sheetName);
   console.log("columnas", parsed.columns);
+  console.log("filas", importData.rows);
+  console.log(
+    "filas_debajo_de_comercial",
+    buildRowsBelowSectionPreview(parsed.rowsBelowSections.Comercial),
+  );
+  console.table(buildRowsBelowSectionPreview(parsed.rowsBelowSections.Comercial));
+  console.log(
+    "filas_mensuales_comercial",
+    parsed.monthlyRowsBySection.Comercial,
+  );
+  console.table(flattenMonthlySectionRows(parsed.monthlyRowsBySection.Comercial));
+  console.log(
+    "filas_debajo_de_industrial",
+    buildRowsBelowSectionPreview(parsed.rowsBelowSections.Industrial),
+  );
+  console.table(buildRowsBelowSectionPreview(parsed.rowsBelowSections.Industrial));
+  console.log(
+    "filas_mensuales_industrial",
+    parsed.monthlyRowsBySection.Industrial,
+  );
+  console.table(flattenMonthlySectionRows(parsed.monthlyRowsBySection.Industrial));
+  console.table(
+    importData.rows.map((row) => ({
+      fila_excel: row.row_number,
+      columna_a: row.payload.columna_a,
+      marca_columna_a: row.payload.marca_columna_a ?? "",
+    })),
+  );
   console.log("total_filas", parsed.parsedRows.length);
   console.log("filas_validas", importData.audit.validRows);
   console.log("filas_con_error", importData.audit.invalidRows);
@@ -323,46 +363,159 @@ export async function createAccountingImportFromUpload(
   console.log("nulos_por_campo", importData.audit.nullFieldCounts);
   console.groupEnd();
 
-  const { data: importRow, error: importError } = await admin
+  return {
+    fileName: file.name,
+    importYear,
+    sheetName: parsed.sheetName,
+    columns: parsed.columns,
+    previewRows: buildPreviewRows(importData),
+    rowsBelowSections: {
+      Comercial: buildRowsBelowSectionPreview(parsed.rowsBelowSections.Comercial),
+      Industrial: buildRowsBelowSectionPreview(parsed.rowsBelowSections.Industrial),
+    },
+    monthlyRowsBySection: {
+      Comercial: flattenMonthlySectionRows(parsed.monthlyRowsBySection.Comercial),
+      Industrial: flattenMonthlySectionRows(parsed.monthlyRowsBySection.Industrial),
+    },
+    totalRows: parsed.parsedRows.length,
+    validRows: importData.audit.validRows,
+    errorRows: importData.audit.invalidRows,
+  };
+}
+
+function normalizeAccountingPreviewSaveRows(input: AccountingPreviewSaveInput) {
+  const rows: AccountingImportJsonRow[] = [];
+
+  for (const section of ["Comercial", "Industrial"] as const) {
+    const sectionRows = input.monthlyRowsBySection[section] ?? [];
+
+    for (const row of sectionRows) {
+      const rowNumber = toNullableNumber(row.fila_excel);
+
+      if (rowNumber === null) {
+        throw new Error("No se pudo identificar la fila Excel de una linea contable.");
+      }
+
+      rows.push({
+        id: rowNumber,
+        row_number: rowNumber,
+        parse_status: "valid",
+        parse_errors: [],
+        payload: {
+          seccion: section,
+          negocio: getAccountingBusinessFromSection(section),
+          grupo: assertAccountingGroup(section, row.grupo),
+          linea: toNullableString(row.linea),
+          enero_ventas: row.enero_ventas ?? null,
+          enero_margen_bruto: row.enero_margen_bruto ?? null,
+          febrero_ventas: row.febrero_ventas ?? null,
+          febrero_margen_bruto: row.febrero_margen_bruto ?? null,
+          marzo_ventas: row.marzo_ventas ?? null,
+          marzo_margen_bruto: row.marzo_margen_bruto ?? null,
+          abril_ventas: row.abril_ventas ?? null,
+          abril_margen_bruto: row.abril_margen_bruto ?? null,
+          mayo_ventas: row.mayo_ventas ?? null,
+          mayo_margen_bruto: row.mayo_margen_bruto ?? null,
+          junio_ventas: row.junio_ventas ?? null,
+          junio_margen_bruto: row.junio_margen_bruto ?? null,
+          julio_ventas: row.julio_ventas ?? null,
+          julio_margen_bruto: row.julio_margen_bruto ?? null,
+          agosto_ventas: row.agosto_ventas ?? null,
+          agosto_margen_bruto: row.agosto_margen_bruto ?? null,
+          setiembre_ventas: row.setiembre_ventas ?? null,
+          setiembre_margen_bruto: row.setiembre_margen_bruto ?? null,
+          octubre_ventas: row.octubre_ventas ?? null,
+          octubre_margen_bruto: row.octubre_margen_bruto ?? null,
+          noviembre_ventas: row.noviembre_ventas ?? null,
+          noviembre_margen_bruto: row.noviembre_margen_bruto ?? null,
+          diciembre_ventas: row.diciembre_ventas ?? null,
+          diciembre_margen_bruto: row.diciembre_margen_bruto ?? null,
+        },
+      });
+    }
+  }
+
+  return rows;
+}
+
+export async function saveAccountingImportFromPreview(
+  input: AccountingPreviewSaveInput,
+  currentUser: CurrentUser,
+) {
+  const admin = createAdminSupabaseClient();
+  const rows = normalizeAccountingPreviewSaveRows(input);
+  const audit = buildImportAudit({
+    rows,
+    getRowNumber: (row) => row.row_number,
+    getPayload: (row) => row.payload,
+    getParseStatus: (row) => row.parse_status,
+    getParseErrors: (row) => row.parse_errors,
+  });
+  const importData = {
+    sheetName: input.sheetName,
+    columns: [
+      "seccion",
+      "negocio",
+      "grupo",
+      "linea",
+      "enero_ventas",
+      "enero_margen_bruto",
+      "febrero_ventas",
+      "febrero_margen_bruto",
+      "marzo_ventas",
+      "marzo_margen_bruto",
+      "abril_ventas",
+      "abril_margen_bruto",
+      "mayo_ventas",
+      "mayo_margen_bruto",
+      "junio_ventas",
+      "junio_margen_bruto",
+      "julio_ventas",
+      "julio_margen_bruto",
+      "agosto_ventas",
+      "agosto_margen_bruto",
+      "setiembre_ventas",
+      "setiembre_margen_bruto",
+      "octubre_ventas",
+      "octubre_margen_bruto",
+      "noviembre_ventas",
+      "noviembre_margen_bruto",
+      "diciembre_ventas",
+      "diciembre_margen_bruto",
+    ],
+    rows,
+    audit,
+  } satisfies AccountingImportJsonPayload;
+  const storagePath = buildImportSourceRef(input.fileName, currentUser.id);
+
+  console.groupCollapsed("[accounting-imports][service] Guardando preview categorizado");
+  console.log("archivo", input.fileName);
+  console.log("usuario", currentUser.id);
+  console.log("anio_importacion", input.importYear);
+  console.log("hoja", input.sheetName);
+  console.log("filas", rows);
+  console.groupEnd();
+
+  const { data: importRow, error } = await admin
     .from("accounting_imports")
     .insert({
-      file_name: file.name,
+      file_name: input.fileName,
       storage_path: storagePath,
-      anio: importYear,
+      anio: input.importYear,
       uploaded_by: currentUser.id,
-      status: "processing",
-      total_rows: parsed.parsedRows.length,
-      valid_rows: importData.audit.validRows,
-      error_rows: importData.audit.invalidRows,
-      sheet_name: parsed.sheetName,
-      notes: `Hoja ${parsed.sheetName}. Negocio ${negocio}. Periodo ${periodoRange.periodo}. Archivo de contabilidad persistido en JSON dentro de accounting_imports.data.`,
-      data: {},
+      status: "processed",
+      total_rows: rows.length,
+      valid_rows: audit.validRows,
+      error_rows: audit.invalidRows,
+      sheet_name: input.sheetName,
+      notes: `Hoja ${input.sheetName}. Archivo de contabilidad guardado desde preview mensual con grupo por fila.`,
+      data: importData,
     })
     .select("id")
     .single();
 
-  if (importError || !importRow) {
-    throw new Error("No se pudo registrar la importacion contable.");
-  }
-
-  const { error: updateError } = await admin
-    .from("accounting_imports")
-    .update({
-      status: "processed",
-      data: importData,
-    })
-    .eq("id", importRow.id as string);
-
-  if (updateError) {
-    await admin
-      .from("accounting_imports")
-      .update({
-        status: "failed",
-        notes: "Fallo al guardar el JSON de contabilidad en accounting_imports.data.",
-      })
-      .eq("id", importRow.id as string);
-
-    throw new Error("No se pudo guardar el JSON de la importacion contable.");
+  if (error || !importRow) {
+    throw new Error("No se pudo guardar la importacion contable.");
   }
 
   revalidatePath("/dashboard/imports");
@@ -370,14 +523,12 @@ export async function createAccountingImportFromUpload(
 
   return {
     id: importRow.id as string,
-    fileName: file.name,
-    importYear,
-    sheetName: parsed.sheetName,
-    columns: parsed.columns,
-    previewRows: buildPreviewRows(importData),
-    totalRows: parsed.parsedRows.length,
-    validRows: importData.audit.validRows,
-    errorRows: importData.audit.invalidRows,
+    fileName: input.fileName,
+    importYear: input.importYear,
+    sheetName: input.sheetName,
+    totalRows: rows.length,
+    validRows: audit.validRows,
+    errorRows: audit.invalidRows,
   };
 }
 
