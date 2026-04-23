@@ -48,6 +48,7 @@ interface UploadResponse {
   previewRows: Record<string, unknown>[];
   rowsBelowSections?: Record<string, Record<string, unknown>[]>;
   monthlyRowsBySection?: Record<string, Record<string, unknown>[]>;
+  rowsBySection?: Record<string, Record<string, unknown>[]>;
   totalRows: number;
   validRows: number;
   errorRows: number;
@@ -126,6 +127,44 @@ const ACCOUNTING_BUSINESS_BY_SECTION = {
   Industrial: "Industrial",
 } as const satisfies Record<AccountingSectionTitle, string>;
 
+const BUDGET_PREVIEW_COLUMNS = [
+  { key: "proyeccion_cierre_anio_anterior", label: "Proy. cierre año anterior" },
+  { key: "plan_anio_actual", label: "Plan año actual" },
+  { key: "enero", label: "Enero" },
+  { key: "febrero", label: "Febrero" },
+  { key: "marzo", label: "Marzo" },
+  { key: "abril", label: "Abril" },
+  { key: "mayo", label: "Mayo" },
+  { key: "junio", label: "Junio" },
+  { key: "julio", label: "Julio" },
+  { key: "agosto", label: "Agosto" },
+  { key: "setiembre", label: "Setiembre" },
+  { key: "octubre", label: "Octubre" },
+  { key: "noviembre", label: "Noviembre" },
+  { key: "diciembre", label: "Diciembre" },
+  { key: "total_anio_actual", label: "Total año actual" },
+] as const;
+
+const BUDGET_GROUP_OPTIONS_BY_SECTION = {
+  Arquitectura: ["Arquitectura"],
+  Comercial: ACCOUNTING_GROUP_OPTIONS_BY_SECTION.Comercial,
+  Industrial: ACCOUNTING_GROUP_OPTIONS_BY_SECTION.Industrial,
+} as const;
+
+type BudgetSectionTitle = keyof typeof BUDGET_GROUP_OPTIONS_BY_SECTION;
+
+const DEFAULT_BUDGET_GROUP_BY_SECTION = {
+  Arquitectura: "Arquitectura",
+  Comercial: DEFAULT_ACCOUNTING_GROUP_BY_SECTION.Comercial,
+  Industrial: DEFAULT_ACCOUNTING_GROUP_BY_SECTION.Industrial,
+} as const satisfies Record<BudgetSectionTitle, string>;
+
+const BUDGET_BUSINESS_BY_SECTION = {
+  Arquitectura: "Arquitectura",
+  Comercial: "Geosinteticos",
+  Industrial: "Industrial",
+} as const satisfies Record<BudgetSectionTitle, string>;
+
 function buildAccountingGroupSelectionKey(
   section: AccountingSectionTitle,
   row: Record<string, unknown>,
@@ -139,6 +178,21 @@ function getDefaultAccountingGroup(section: AccountingSectionTitle) {
 
 function getAccountingBusiness(section: AccountingSectionTitle) {
   return ACCOUNTING_BUSINESS_BY_SECTION[section];
+}
+
+function buildBudgetRowSelectionKey(
+  section: BudgetSectionTitle,
+  row: Record<string, unknown>,
+) {
+  return `${section}:${String(row.fila_excel ?? row.linea_original ?? row.linea ?? "")}`;
+}
+
+function getDefaultBudgetGroup(section: BudgetSectionTitle) {
+  return DEFAULT_BUDGET_GROUP_BY_SECTION[section];
+}
+
+function getBudgetBusiness(section: BudgetSectionTitle) {
+  return BUDGET_BUSINESS_BY_SECTION[section];
 }
 
 function normalizePreviewColumnKey(header: string) {
@@ -422,6 +476,133 @@ function AccountingMonthlyPreviewTable({
   );
 }
 
+function BudgetSectionPreviewTable({
+  title,
+  rows,
+  groupSelections,
+  lineOverrides,
+  onGroupChange,
+  onLineChange,
+}: {
+  title: BudgetSectionTitle;
+  rows: Record<string, unknown>[];
+  groupSelections: Record<string, string>;
+  lineOverrides: Record<string, string>;
+  onGroupChange: (
+    section: BudgetSectionTitle,
+    row: Record<string, unknown>,
+    group: string,
+  ) => void;
+  onLineChange: (
+    section: BudgetSectionTitle,
+    row: Record<string, unknown>,
+    line: string,
+  ) => void;
+}) {
+  const groupOptions = BUDGET_GROUP_OPTIONS_BY_SECTION[title];
+
+  return (
+    <div className="space-y-3 rounded-3xl border border-border/70 bg-background/80 p-3 shadow-sm">
+      <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h4 className="font-medium">{title}</h4>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {rows.length} filas detectadas para guardar en presupuesto.
+          </p>
+        </div>
+      </div>
+      {rows.length ? (
+        <TopScrollSync minWidthClassName="min-w-max">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/60">
+              <tr className="border-b">
+                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
+                  Grupo
+                </th>
+                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
+                  Línea original
+                </th>
+                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
+                  Línea a mostrar
+                </th>
+                {BUDGET_PREVIEW_COLUMNS.map((column) => (
+                  <th
+                    key={column.key}
+                    className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap"
+                  >
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => {
+                const rowKey = buildBudgetRowSelectionKey(title, row);
+                const originalLine = String(row.linea_original ?? row.linea ?? "");
+
+                return (
+                  <tr
+                    key={`${title}-${rowIndex}`}
+                    className="border-b align-top last:border-b-0 odd:bg-background even:bg-muted/10"
+                  >
+                    <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
+                      <select
+                        data-loading-overlay-ignore="true"
+                        className="h-10 min-w-52 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                        value={
+                          groupSelections[rowKey] ?? getDefaultBudgetGroup(title)
+                        }
+                        onChange={(event) =>
+                          onGroupChange(title, row, event.target.value)
+                        }
+                      >
+                        {groupOptions.map((group) => (
+                          <option key={group} value={group}>
+                            {group}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
+                      {originalLine || (
+                        <span className="text-muted-foreground/60">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
+                      <input
+                        data-loading-overlay-ignore="true"
+                        className="h-10 min-w-64 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                        value={lineOverrides[rowKey] ?? originalLine}
+                        onChange={(event) =>
+                          onLineChange(title, row, event.target.value)
+                        }
+                      />
+                    </td>
+                    {BUDGET_PREVIEW_COLUMNS.map((column) => (
+                      <td
+                        key={`${title}-${rowIndex}-${column.key}`}
+                        className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap"
+                      >
+                        {formatPreviewCell(row[column.key], column.key) || (
+                          <span className="text-muted-foreground/60">-</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TopScrollSync>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+          No se detectaron filas para esta sección.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ImportUploadCard({
   title,
   eyebrow,
@@ -466,7 +647,14 @@ function ImportUploadCard({
   const [previewPage, setPreviewPage] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [isSavingAccounting, startSavingAccounting] = useTransition();
+  const [isSavingBudget, startSavingBudget] = useTransition();
   const [accountingGroupSelections, setAccountingGroupSelections] = useState<
+    Record<string, string>
+  >({});
+  const [budgetGroupSelections, setBudgetGroupSelections] = useState<
+    Record<string, string>
+  >({});
+  const [budgetLineOverrides, setBudgetLineOverrides] = useState<
     Record<string, string>
   >({});
 
@@ -527,6 +715,25 @@ function ImportUploadCard({
         getDefaultAccountingGroup(section)
       ),
   ).length;
+  const architectureBudgetRows = preview?.rowsBySection?.Arquitectura ?? [];
+  const commercialBudgetRows = preview?.rowsBySection?.Comercial ?? [];
+  const industrialBudgetRows = preview?.rowsBySection?.Industrial ?? [];
+  const hasBudgetPreview = Boolean(preview?.rowsBySection);
+  const budgetPreviewRows = [
+    ...architectureBudgetRows.map((row) => ({
+      section: "Arquitectura" as const,
+      row,
+    })),
+    ...commercialBudgetRows.map((row) => ({
+      section: "Comercial" as const,
+      row,
+    })),
+    ...industrialBudgetRows.map((row) => ({
+      section: "Industrial" as const,
+      row,
+    })),
+  ];
+  const budgetPreviewRowCount = budgetPreviewRows.length;
 
   const previewRangeStart = preview?.previewRows.length
     ? (previewPage - 1) * PREVIEW_PAGE_SIZE + 1
@@ -620,12 +827,22 @@ function ImportUploadCard({
           );
           console.table(payload.monthlyRowsBySection.Industrial ?? []);
         }
+        if (payload.rowsBySection) {
+          console.log("filas_arquitectura", payload.rowsBySection.Arquitectura ?? []);
+          console.table(payload.rowsBySection.Arquitectura ?? []);
+          console.log("filas_comercial", payload.rowsBySection.Comercial ?? []);
+          console.table(payload.rowsBySection.Comercial ?? []);
+          console.log("filas_industrial", payload.rowsBySection.Industrial ?? []);
+          console.table(payload.rowsBySection.Industrial ?? []);
+        }
         console.table(payload.previewRows.slice(0, 10));
         console.table(payload.previewRows);
         console.groupEnd();
 
         setPreview(payload);
         setAccountingGroupSelections({});
+        setBudgetGroupSelections({});
+        setBudgetLineOverrides({});
         setPreviewPage(1);
         router.refresh();
         toast.success(successMessage);
@@ -659,6 +876,46 @@ function ImportUploadCard({
         buildAccountingGroupSelectionKey(section, row)
       ] ?? getDefaultAccountingGroup(section),
     }));
+  }
+
+  function handleBudgetGroupChange(
+    section: BudgetSectionTitle,
+    row: Record<string, unknown>,
+    group: string,
+  ) {
+    setBudgetGroupSelections((current) => ({
+      ...current,
+      [buildBudgetRowSelectionKey(section, row)]: group,
+    }));
+  }
+
+  function handleBudgetLineChange(
+    section: BudgetSectionTitle,
+    row: Record<string, unknown>,
+    line: string,
+  ) {
+    setBudgetLineOverrides((current) => ({
+      ...current,
+      [buildBudgetRowSelectionKey(section, row)]: line,
+    }));
+  }
+
+  function buildRowsWithBudgetCategories(
+    section: BudgetSectionTitle,
+    rows: Record<string, unknown>[],
+  ) {
+    return rows.map((row) => {
+      const rowKey = buildBudgetRowSelectionKey(section, row);
+      const originalLine = row.linea_original ?? row.linea ?? null;
+
+      return {
+        ...row,
+        negocio: getBudgetBusiness(section),
+        grupo: budgetGroupSelections[rowKey] ?? getDefaultBudgetGroup(section),
+        linea_original: originalLine,
+        linea: budgetLineOverrides[rowKey] ?? originalLine,
+      };
+    });
   }
 
   function handleSaveAccountingPreview() {
@@ -720,17 +977,75 @@ function ImportUploadCard({
     });
   }
 
+  function handleSaveBudgetPreview() {
+    if (!preview?.rowsBySection) return;
+
+    if (budgetPreviewRowCount === 0) {
+      toast.error("No hay filas de presupuesto para guardar.");
+      return;
+    }
+
+    if (typeof preview.importYear !== "number") {
+      toast.error("El año de carga no es valido.");
+      return;
+    }
+
+    startSavingBudget(async () => {
+      try {
+        const response = await fetch(uploadEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: preview.fileName,
+            importYear: preview.importYear,
+            sheetName: preview.sheetName,
+            rowsBySection: {
+              Arquitectura: buildRowsWithBudgetCategories(
+                "Arquitectura",
+                architectureBudgetRows,
+              ),
+              Comercial: buildRowsWithBudgetCategories(
+                "Comercial",
+                commercialBudgetRows,
+              ),
+              Industrial: buildRowsWithBudgetCategories(
+                "Industrial",
+                industrialBudgetRows,
+              ),
+            },
+          }),
+        });
+        const payload = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? "No se pudo guardar el presupuesto.");
+        }
+
+        router.refresh();
+        toast.success("Importación de presupuesto guardada.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar el presupuesto.",
+        );
+      }
+    });
+  }
+
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden border-slate-800 bg-[linear-gradient(180deg,rgba(6,18,30,0.98)_0%,rgba(10,28,46,0.98)_100%)] text-white shadow-2xl">
       <div className={cn("h-1 w-full", accentClassName)} />
       <CardHeader className="space-y-3">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-sm uppercase tracking-[0.3em] text-slate-400">
               {eyebrow}
             </p>
             <CardTitle className="mt-2">{title}</CardTitle>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
               {description}
             </p>
           </div>
@@ -739,7 +1054,7 @@ function ImportUploadCard({
               href={templateHref}
               className={cn(
                 buttonVariants({ variant: "secondary" }),
-                "flex h-12 w-full items-center justify-center gap-2 rounded-2xl border-border/70 bg-background/80 px-6 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:bg-background sm:w-auto sm:min-w-[240px]",
+                "flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-6 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 sm:w-auto sm:min-w-[240px]",
               )}
             >
               <Download className="size-4" />
@@ -753,6 +1068,7 @@ function ImportUploadCard({
           <div className="space-y-2">
             <Label>Año de carga</Label>
             <Input
+              className="border-slate-700 bg-slate-900 text-white placeholder:text-slate-500"
               type="number"
               min={2020}
               max={2100}
@@ -766,7 +1082,7 @@ function ImportUploadCard({
           <div className="space-y-2">
             <Label>Tipo de negocio</Label>
             <select
-              className="flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-10 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
               value={selectedBusiness}
               onChange={(event) => setSelectedBusiness(event.target.value)}
             >
@@ -784,7 +1100,7 @@ function ImportUploadCard({
             <div className="space-y-2">
               <Label>Periodo desde</Label>
               <select
-                className="flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-10 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
                 value={selectedPeriodFrom}
                 onChange={(event) => setSelectedPeriodFrom(event.target.value)}
               >
@@ -798,7 +1114,7 @@ function ImportUploadCard({
             <div className="space-y-2">
               <Label>Periodo hasta</Label>
               <select
-                className="flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-10 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
                 value={selectedPeriodTo}
                 onChange={(event) => setSelectedPeriodTo(event.target.value)}
               >
@@ -812,7 +1128,7 @@ function ImportUploadCard({
           </div>
         ) : null}
 
-        <div className="rounded-3xl border border-border/70 bg-muted/20 p-4">
+        <div className="rounded-3xl border border-slate-700/80 bg-slate-950/70 p-4">
           <input
             id={fileInputId}
             type="file"
@@ -822,13 +1138,13 @@ function ImportUploadCard({
           />
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">
+              <p className="text-sm font-medium text-white">
                 Archivo de importación
               </p>
-              <p className="text-xs leading-5 text-muted-foreground">
+              <p className="text-xs leading-5 text-slate-400">
                 Formato soportado actualmente: `.xlsx`. Selecciona el archivo y luego procesa la carga.
               </p>
-              <div className="inline-flex min-h-9 max-w-full items-center rounded-2xl border border-dashed border-border bg-background/80 px-3 py-2 text-sm text-foreground shadow-sm">
+              <div className="inline-flex min-h-9 max-w-full items-center rounded-2xl border border-dashed border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white shadow-sm">
                 <span className="truncate">
                   {file ? file.name : "Ningún archivo seleccionado"}
                 </span>
@@ -837,7 +1153,7 @@ function ImportUploadCard({
             <Button
               type="button"
           
-              className="h-11 rounded-2xl border-border/70 bg-background px-4 shadow-sm"
+              className="h-11 rounded-2xl border border-slate-700 bg-slate-900 px-4 text-white shadow-sm hover:bg-slate-800"
               onClick={() => document.getElementById(fileInputId)?.click()}
             >
               <UploadCloud className="size-4" />
@@ -860,44 +1176,44 @@ function ImportUploadCard({
         </Button>
 
         {preview ? (
-          <div className="rounded-3xl border border-border/70 bg-muted/30 p-5">
+          <div className="rounded-3xl border border-slate-700/80 bg-slate-950/70 p-5">
             <div className="space-y-1">
               <p className="text-sm font-medium">Resumen de la última carga</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-slate-400">
                 La tabla inferior muestra el payload tal como entra desde el Excel.
               </p>
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-              <div className="rounded-2xl border bg-background/70 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Archivo
                 </p>
                 <p className="mt-2 text-sm font-medium">{preview.fileName}</p>
               </div>
-              <div className="rounded-2xl border bg-background/70 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Año
                 </p>
                 <p className="mt-2 text-sm font-medium">{preview.importYear}</p>
               </div>
-              <div className="rounded-2xl border bg-background/70 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Hoja
                 </p>
                 <p className="mt-2 text-sm font-medium">{preview.sheetName}</p>
               </div>
               {businessOptions ? (
-                <div className="rounded-2xl border bg-background/70 p-3">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                     Negocio
                   </p>
                   <p className="mt-2 text-sm font-medium">{selectedBusiness}</p>
                 </div>
               ) : null}
               {periodOptions ? (
-                <div className="rounded-2xl border bg-background/70 p-3">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                     Periodo
                   </p>
                   <p className="mt-2 text-sm font-medium">
@@ -907,25 +1223,25 @@ function ImportUploadCard({
                   </p>
                 </div>
               ) : null}
-              <div className="rounded-2xl border bg-background/70 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Total filas
                 </p>
                 <p className="mt-2 text-sm font-medium">{preview.totalRows}</p>
               </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">
                   Válidas
                 </p>
-                <p className="mt-2 text-sm font-semibold text-emerald-900">
+                <p className="mt-2 text-sm font-semibold text-white">
                   {preview.validRows}
                 </p>
               </div>
-              <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-rose-700">
+              <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-rose-300">
                   Con error
                 </p>
-                <p className="mt-2 text-sm font-semibold text-rose-900">
+                <p className="mt-2 text-sm font-semibold text-white">
                   {preview.errorRows}
                 </p>
               </div>
@@ -937,22 +1253,32 @@ function ImportUploadCard({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h3 className="font-medium">Preview del payload</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-slate-400">
                 {preview?.monthlyRowsBySection
                   ? "Se muestran las líneas de Comercial e Industrial con ventas y margen bruto por mes."
+                  : preview?.rowsBySection
+                    ? "Se muestran las líneas de presupuesto por sección, con la línea original y la línea a mostrar."
                   : "Se muestran las filas tal como llegan del Excel. Los valores nulos se ven en blanco."}
               </p>
             </div>
             {hasAccountingMonthlyPreview ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
                 <span>Comercial: {comercialMonthlyPreviewRows.length} filas</span>
                 <span className="hidden sm:inline">|</span>
                 <span>Industrial: {industrialMonthlyPreviewRows.length} filas</span>
                 <span className="hidden sm:inline">|</span>
                 <span>{ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.length} columnas visibles</span>
               </div>
+            ) : hasBudgetPreview ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+                <span>Arquitectura: {architectureBudgetRows.length} filas</span>
+                <span className="hidden sm:inline">|</span>
+                <span>Comercial: {commercialBudgetRows.length} filas</span>
+                <span className="hidden sm:inline">|</span>
+                <span>Industrial: {industrialBudgetRows.length} filas</span>
+              </div>
             ) : preview?.previewRows.length ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
                 <span>
                   Mostrando {previewRangeStart}-{previewRangeEnd} de {preview.previewRows.length}
                 </span>
@@ -976,15 +1302,15 @@ function ImportUploadCard({
                 groupSelections={accountingGroupSelections}
                 onGroupChange={handleAccountingGroupChange}
               />
-              <div className="flex flex-col gap-3 rounded-3xl border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">
+              <div className="flex flex-col gap-3 rounded-3xl border border-slate-700/80 bg-slate-950/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-300">
                   {missingAccountingGroups > 0
                     ? `Faltan ${missingAccountingGroups} grupos por seleccionar.`
                     : "Todas las filas tienen grupo asignado."}
                 </p>
                 <Button
                   type="button"
-                  className="h-11 rounded-2xl bg-slate-900 px-5 text-white hover:bg-slate-800"
+                  className="h-11 rounded-2xl border border-slate-700 bg-slate-900 px-5 text-white hover:bg-slate-800"
                   disabled={
                     isSavingAccounting ||
                     accountingMonthlyPreviewRowCount === 0 ||
@@ -1001,16 +1327,61 @@ function ImportUploadCard({
                 </Button>
               </div>
             </div>
+          ) : hasBudgetPreview ? (
+            <div className="space-y-4">
+              <BudgetSectionPreviewTable
+                title="Arquitectura"
+                rows={architectureBudgetRows}
+                groupSelections={budgetGroupSelections}
+                lineOverrides={budgetLineOverrides}
+                onGroupChange={handleBudgetGroupChange}
+                onLineChange={handleBudgetLineChange}
+              />
+              <BudgetSectionPreviewTable
+                title="Comercial"
+                rows={commercialBudgetRows}
+                groupSelections={budgetGroupSelections}
+                lineOverrides={budgetLineOverrides}
+                onGroupChange={handleBudgetGroupChange}
+                onLineChange={handleBudgetLineChange}
+              />
+              <BudgetSectionPreviewTable
+                title="Industrial"
+                rows={industrialBudgetRows}
+                groupSelections={budgetGroupSelections}
+                lineOverrides={budgetLineOverrides}
+                onGroupChange={handleBudgetGroupChange}
+                onLineChange={handleBudgetLineChange}
+              />
+              <div className="flex flex-col gap-3 rounded-3xl border border-slate-700/80 bg-slate-950/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-300">
+                  Se guardará la línea original y la línea a mostrar por cada fila.
+                </p>
+                <Button
+                  type="button"
+                  className="h-11 rounded-2xl border border-slate-700 bg-slate-900 px-5 text-white hover:bg-slate-800"
+                  disabled={isSavingBudget || budgetPreviewRowCount === 0}
+                  onClick={handleSaveBudgetPreview}
+                >
+                  {isSavingBudget ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <UploadCloud className="size-4" />
+                  )}
+                  Guardar presupuesto
+                </Button>
+              </div>
+            </div>
           ) : preview?.previewRows.length ? (
-            <div className="space-y-3 rounded-3xl border border-border/70 bg-background/80 p-3 shadow-sm">
+            <div className="space-y-3 rounded-3xl border border-slate-700/80 bg-slate-950/75 p-3 shadow-sm">
               <TopScrollSync minWidthClassName="min-w-max">
                 <table className="w-full text-sm">
-                  <thead className="bg-muted/60">
+                  <thead className="bg-slate-900/90">
                     <tr className="border-b">
                       {previewColumns.map((column) => (
                         <th
                           key={column.key}
-                          className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap"
+                          className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-400 whitespace-nowrap"
                         >
                           {column.label}
                         </th>
@@ -1021,16 +1392,16 @@ function ImportUploadCard({
                     {paginatedPreviewRows.map((row, index) => (
                       <tr
                         key={`${previewPage}-${index}`}
-                        className="border-b align-top last:border-b-0 odd:bg-background even:bg-muted/10"
+                        className="border-b border-slate-800 align-top last:border-b-0 odd:bg-slate-950/60 even:bg-slate-900/40"
                       >
                         {previewColumns.map((column) => (
                           <td
                             key={`${previewPage}-${index}-${column.key}`}
-                            className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap"
+                            className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap"
                           >
                             <div className="whitespace-pre-wrap">
                               {formatPreviewCell(row[column.key], column.key) || (
-                                <span className="text-muted-foreground/60">-</span>
+                                <span className="text-slate-500">-</span>
                               )}
                             </div>
                           </td>
@@ -1042,7 +1413,7 @@ function ImportUploadCard({
               </TopScrollSync>
 
               <div className="flex flex-col gap-3 border-t px-1 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-400">
                   Navega en bloques de {PREVIEW_PAGE_SIZE} filas para revisar el parseo con menos ruido visual.
                 </p>
                 <div className="flex items-center gap-2">
@@ -1055,7 +1426,7 @@ function ImportUploadCard({
                     <ChevronLeft className="size-4" />
                     Anterior
                   </Button>
-                  <div className="min-w-28 text-center text-sm text-muted-foreground">
+                  <div className="min-w-28 text-center text-sm text-slate-400">
                     Página {previewPage} de {totalPreviewPages}
                   </div>
                   <Button
@@ -1133,32 +1504,32 @@ function ImportHistoryCard({
   }
 
   return (
-    <Card>
+    <Card className="border-slate-800 bg-[linear-gradient(180deg,rgba(6,18,30,0.98)_0%,rgba(10,28,46,0.98)_100%)] text-white shadow-2xl">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className={showYearColumn ? undefined : "[&_th:nth-child(2)]:hidden [&_td:nth-child(2)]:hidden"}>
           <TopScrollSync minWidthClassName="min-w-[980px]">
-            <Table>
+            <Table className="border-slate-700 bg-slate-950/70 text-white">
               <TableElement>
-              <TableHead>
+              <TableHead className="bg-slate-900/90">
                 <tr>
-                  <TableHeaderCell>Archivo</TableHeaderCell>
+                  <TableHeaderCell className="text-slate-400">Archivo</TableHeaderCell>
                   <TableHeaderCell>Año</TableHeaderCell>
-                  <TableHeaderCell>Usuario</TableHeaderCell>
-                  <TableHeaderCell>Fecha</TableHeaderCell>
-                  <TableHeaderCell>Estado</TableHeaderCell>
-                  <TableHeaderCell>Filas</TableHeaderCell>
+                  <TableHeaderCell className="text-slate-400">Usuario</TableHeaderCell>
+                  <TableHeaderCell className="text-slate-400">Fecha</TableHeaderCell>
+                  <TableHeaderCell className="text-slate-400">Estado</TableHeaderCell>
+                  <TableHeaderCell className="text-slate-400">Filas</TableHeaderCell>
                   <TableHeaderCell>Válidas</TableHeaderCell>
-                  <TableHeaderCell>Errores</TableHeaderCell>
+                  <TableHeaderCell className="text-slate-400">Errores</TableHeaderCell>
                   <TableHeaderCell className="text-right">Acciones</TableHeaderCell>
                 </tr>
               </TableHead>
-                <TableBody>
+                <TableBody className="divide-slate-800 bg-slate-950/50">
                 {imports.length ? (
                   imports.map((item) => (
-                    <TableRow key={item.id}>
+                    <TableRow key={item.id} className="text-white hover:bg-slate-900/70">
                       <TableCell className="font-medium">{item.file_name}</TableCell>
                       <TableCell>{showYearColumn ? item.anio ?? "-" : null}</TableCell>
                       <TableCell>
@@ -1181,7 +1552,7 @@ function ImportHistoryCard({
                             <Link href={`${editBasePath}/${item.id}`}>
                               <Button
                                 size="sm"
-                                className="border border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100"
+                                className="border border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
                               >
                                 <PencilLine className="size-4" />
                                 Editar
@@ -1191,6 +1562,7 @@ function ImportHistoryCard({
                           <Button
                             size="sm"
                             variant="destructive"
+                            className="border border-rose-500/30 bg-rose-500/15 text-white hover:bg-rose-500/25"
                             onClick={() => handleDeleteImport(item.id)}
                             disabled={deletingImportId === item.id}
                           >
@@ -1209,7 +1581,7 @@ function ImportHistoryCard({
                   <tr>
                     <td
                       colSpan={9}
-                      className="px-4 py-10 text-center text-sm text-muted-foreground"
+                      className="px-4 py-10 text-center text-sm text-slate-400"
                     >
                       {emptyLabel}
                     </td>
@@ -1228,27 +1600,29 @@ function ImportHistoryCard({
 export function ImportsPageView({
   imports,
   accountingImports,
+  budgetImports,
 }: {
   imports: ImportRecord[];
   accountingImports: ImportRecord[];
+  budgetImports: ImportRecord[];
 }) {
   return (
     <div className="space-y-8">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="text-sm uppercase tracking-[0.3em] text-slate-400">
             Centro de importaciones
           </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight">
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
             Flujo de carga
           </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Gestiona dos cargas independientes: AX comercial se conserva para auditoría, y contabilidad queda en modo revisión para leer el Excel y revisar marcas desde consola.
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+            Gestiona cargas independientes para AX comercial, contabilidad y presupuestos.
           </p>
         </div>
       </section>
 
-      <div className="grid gap-6 2xl:grid-cols-2">
+      <div className="grid gap-6 2xl:grid-cols-3">
         <ImportUploadCard
           title="Subir Excel de AX"
           eyebrow="Cargas AX"
@@ -1270,6 +1644,15 @@ export function ImportsPageView({
           consoleLabel="[accounting-imports] Excel cargado"
           accentClassName="bg-[linear-gradient(90deg,#17456d_0%,#2d7f73_100%)]"
         />
+        <ImportUploadCard
+          title="Subir Excel de presupuestos"
+          eyebrow="Cargas de presupuesto"
+          description="Carga el presupuesto por secciones: Arquitectura hasta TOTAL ARQUITECTURA, Geosinteticos hasta TOTAL GEOSINTETICOS e Industrial hasta TOTAL INDUSTRIAL."
+          uploadEndpoint="/api/budget-imports"
+          successMessage="Excel de presupuestos procesado correctamente."
+          consoleLabel="[budget-imports] Excel cargado"
+          accentClassName="bg-[linear-gradient(90deg,#23504f_0%,#5f7f3b_100%)]"
+        />
       </div>
 
       <div className="grid gap-6">
@@ -1287,6 +1670,12 @@ export function ImportsPageView({
           deleteEndpointBase="/api/accounting-imports"
           editBasePath="/dashboard/imports/contabilidad"
           emptyLabel="No hay importaciones contables registradas todavía."
+        />
+        <ImportHistoryCard
+          title="Historial reciente presupuestos"
+          imports={budgetImports}
+          deleteEndpointBase="/api/budget-imports"
+          emptyLabel="No hay importaciones de presupuestos registradas todavía."
         />
       </div>
     </div>

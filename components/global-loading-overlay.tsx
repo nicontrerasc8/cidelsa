@@ -6,9 +6,12 @@ import { LoaderCircle } from "lucide-react";
 
 type LoadingMode = "route" | "filter";
 
-const MIN_VISIBLE_MS = 420;
+const ROUTE_MIN_VISIBLE_MS = 260;
+const FILTER_MIN_VISIBLE_MS = 120;
 const QUIET_PERIOD_MS = 260;
 const ROUTE_FALLBACK_MS = 5000;
+const ROUTE_SHOW_DELAY_MS = 120;
+const FILTER_SHOW_DELAY_MS = 220;
 
 function shouldHandleAnchor(anchor: HTMLAnchorElement) {
   const href = anchor.getAttribute("href");
@@ -46,6 +49,7 @@ export function GlobalLoadingOverlay() {
   const settleObserverRef = useRef<MutationObserver | null>(null);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRouteKeyRef = useRef(routeKey);
 
   const clearSettleObserver = useCallback(() => {
@@ -65,10 +69,18 @@ export function GlobalLoadingOverlay() {
     }
   }, []);
 
+  const clearShowTimer = useCallback(() => {
+    if (showTimerRef.current) {
+      clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
+  }, []);
+
   const clearAllTimers = useCallback(() => {
     clearSettleObserver();
     clearFallbackTimer();
-  }, [clearFallbackTimer, clearSettleObserver]);
+    clearShowTimer();
+  }, [clearFallbackTimer, clearSettleObserver, clearShowTimer]);
 
   const hideOverlay = useCallback(() => {
     setVisible(false);
@@ -79,8 +91,9 @@ export function GlobalLoadingOverlay() {
 
   const hideWithMinimumDelay = useCallback(() => {
     const shownAt = shownAtRef.current;
-    const elapsed = shownAt ? Date.now() - shownAt : MIN_VISIBLE_MS;
-    const remaining = Math.max(MIN_VISIBLE_MS - elapsed, 0);
+    const minVisibleMs = mode === "filter" ? FILTER_MIN_VISIBLE_MS : ROUTE_MIN_VISIBLE_MS;
+    const elapsed = shownAt ? Date.now() - shownAt : minVisibleMs;
+    const remaining = Math.max(minVisibleMs - elapsed, 0);
 
     clearSettleObserver();
     clearFallbackTimer();
@@ -88,7 +101,7 @@ export function GlobalLoadingOverlay() {
     settleTimerRef.current = setTimeout(() => {
       hideOverlay();
     }, remaining);
-  }, [clearFallbackTimer, clearSettleObserver, hideOverlay]);
+  }, [clearFallbackTimer, clearSettleObserver, hideOverlay, mode]);
 
   const beginSettleWatch = useCallback(() => {
     clearSettleObserver();
@@ -122,14 +135,18 @@ export function GlobalLoadingOverlay() {
   const showOverlay = useCallback(
     (nextMode: LoadingMode) => {
       clearAllTimers();
-      setMode(nextMode);
-      setVisible(true);
-      shownAtRef.current = Date.now();
       waitingRouteRef.current = true;
+      const delay = nextMode === "filter" ? FILTER_SHOW_DELAY_MS : ROUTE_SHOW_DELAY_MS;
 
-      routeFallbackTimerRef.current = setTimeout(() => {
-        hideOverlay();
-      }, ROUTE_FALLBACK_MS);
+      showTimerRef.current = setTimeout(() => {
+        setMode(nextMode);
+        setVisible(true);
+        shownAtRef.current = Date.now();
+
+        routeFallbackTimerRef.current = setTimeout(() => {
+          hideOverlay();
+        }, ROUTE_FALLBACK_MS);
+      }, delay);
     },
     [clearAllTimers, hideOverlay],
   );
@@ -195,12 +212,14 @@ export function GlobalLoadingOverlay() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[100]">
-      <div className="absolute inset-0 bg-slate-950/28 backdrop-blur-[3px]" />
+      <div className={mode === "filter" ? "absolute inset-0 bg-transparent" : "absolute inset-0 bg-slate-950/28 backdrop-blur-[3px]"} />
       <div className="absolute inset-x-0 top-0 h-1 overflow-hidden bg-white/20">
         <div className="h-full w-1/3 animate-[loading-slide_1.1s_ease-in-out_infinite] rounded-full bg-[linear-gradient(90deg,#86cf47_0%,#4fa3ff_50%,#f4a261_100%)]" />
       </div>
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="flex min-w-[240px] items-center gap-4 rounded-[1.75rem] border border-white/15 bg-[#07131f]/92 px-5 py-4 text-white shadow-[0_24px_60px_rgba(7,19,31,0.35)]">
+      <div className={mode === "filter" ? "absolute right-4 top-4 flex justify-end p-0" : "absolute inset-0 flex items-center justify-center p-4"}>
+        <div className={mode === "filter"
+          ? "flex min-w-[220px] items-center gap-3 rounded-2xl border border-white/10 bg-[#07131f]/88 px-4 py-3 text-white shadow-[0_16px_36px_rgba(7,19,31,0.28)]"
+          : "flex min-w-[240px] items-center gap-4 rounded-[1.75rem] border border-white/15 bg-[#07131f]/92 px-5 py-4 text-white shadow-[0_24px_60px_rgba(7,19,31,0.35)]"}>
           <div className="rounded-2xl bg-white/10 p-3">
             <LoaderCircle className="size-6 animate-spin" />
           </div>

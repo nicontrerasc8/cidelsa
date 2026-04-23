@@ -42,11 +42,15 @@ export function getDefaultDashboardPath(role: AppRole) {
     return "/dashboard/vendedor";
   }
 
+  if (canAccessExecutiveDashboards(role)) {
+    return "/dashboard/ventas-clientes";
+  }
+
   if (canManageImports(role)) {
     return "/dashboard/imports";
   }
 
-  return "/dashboard/ventas-clientes";
+  return "/";
 }
 
 export function canAccessSidebarPath(role: AppRole, path: string) {

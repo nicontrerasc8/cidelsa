@@ -1,29 +1,18 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+
 import { requireRoleAccess } from "@/lib/auth/authorization";
 import { sellerDashboardRoles } from "@/lib/auth/roles";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
-  getPayloadCliente,
-  getPayloadNegocio,
-  getPayloadPipeline,
-  getPayloadPipelineMonto,
-  getPayloadVentasMonto,
-  getPayloadYear,
-  isRecord,
-  normalizeComparableText,
-  normalizeSituation,
-  normalizeText,
-  parseMonthIndex,
-} from "@/modules/dashboard/services/import-payload";
-
-type ImportRow = {
-  anio: number | null;
-  data?: unknown;
-};
+  DASHBOARD_IMPORTS_TAG,
+  getCachedNormalizedDashboardImportRows,
+} from "@/modules/dashboard/services/dashboard-source-cache";
+import { normalizeComparableText } from "@/modules/dashboard/services/import-payload";
 
 export type ExecutiveImportRow = {
   importYear: number | null;
+  activityYear: number | null;
   cliente: string | null;
   negocio: string | null;
   linea: string | null;
@@ -37,6 +26,37 @@ export type ExecutiveImportRow = {
   ejecutivo: string | null;
 };
 
+const loadExecutiveImportRows = unstable_cache(
+  async (normalizedUserName: string): Promise<ExecutiveImportRow[]> => {
+    const data = await getCachedNormalizedDashboardImportRows();
+    const rows: ExecutiveImportRow[] = [];
+
+    for (const row of data) {
+      if (row.comparableEjecutivo !== normalizedUserName) continue;
+
+      rows.push({
+        importYear: row.importYear,
+        activityYear: row.activityYear,
+        cliente: row.cliente,
+        negocio: row.negocio,
+        linea: row.linea,
+        etapa: row.etapa,
+        situacion: row.situacion,
+        monthIndex: row.monthIndex,
+        tipoPipeline: row.tipoPipeline,
+        ventasMonto: row.ventasMonto,
+        pipelineMonto: row.pipelineMonto,
+        fechaFacturacion: row.fechaFacturacion,
+        ejecutivo: row.ejecutivo,
+      });
+    }
+
+    return rows;
+  },
+  ["executive-import-rows-by-user"],
+  { tags: [DASHBOARD_IMPORTS_TAG] },
+);
+
 export async function getExecutiveImportRows() {
   const user = await requireRoleAccess([...sellerDashboardRoles]);
   const normalizedUserName = normalizeComparableText(user.fullName);
@@ -45,46 +65,5 @@ export async function getExecutiveImportRows() {
     return [] as ExecutiveImportRow[];
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("imports")
-    .select("anio, data, status")
-    .eq("status", "processed")
-    .order("anio", { ascending: false });
-
-  if (error || !data) {
-    return [] as ExecutiveImportRow[];
-  }
-
-  const rows: ExecutiveImportRow[] = [];
-
-  for (const item of data as ImportRow[]) {
-    if (!isRecord(item.data) || !Array.isArray(item.data.rows)) continue;
-
-    for (const rawRow of item.data.rows) {
-      if (!isRecord(rawRow) || !isRecord(rawRow.payload)) continue;
-
-      const payload = rawRow.payload;
-      const ejecutivo = normalizeComparableText(payload.ejecutivo);
-
-      if (ejecutivo !== normalizedUserName) continue;
-
-      rows.push({
-        importYear: getPayloadYear(payload.anio) ?? item.anio,
-        cliente: getPayloadCliente(payload),
-        negocio: getPayloadNegocio(payload),
-        linea: normalizeText(payload.linea),
-        etapa: normalizeComparableText(payload.etapa),
-        situacion: normalizeSituation(payload.situacion),
-        monthIndex: parseMonthIndex(payload.mes),
-        tipoPipeline: getPayloadPipeline(payload),
-        ventasMonto: getPayloadVentasMonto(payload),
-        pipelineMonto: getPayloadPipelineMonto(payload),
-        fechaFacturacion: normalizeText(payload.fecha_facturacion),
-        ejecutivo: normalizeText(payload.ejecutivo),
-      });
-    }
-  }
-
-  return rows;
+  return loadExecutiveImportRows(normalizedUserName);
 }

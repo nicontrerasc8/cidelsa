@@ -20,6 +20,7 @@ import {
   parseImportAudit,
   type ImportAudit,
 } from "@/modules/imports/services/import-audit";
+import { revalidateDashboardDataCache } from "@/modules/dashboard/services/dashboard-source-cache";
 
 export const importAccessRoles = importManagerRoles;
 
@@ -441,6 +442,7 @@ export async function createImportFromUpload(
   revalidatePath("/dashboard/imports");
   revalidatePath("/dashboard/imports/[importId]", "page");
   revalidatePath("/dashboard");
+  revalidateDashboardDataCache();
 
   return {
     id: importId,
@@ -516,6 +518,7 @@ export async function updateImportMetadata(
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/${importId}`);
+  revalidateDashboardDataCache();
 }
 
 export async function deleteImport(importId: string) {
@@ -533,6 +536,7 @@ export async function deleteImport(importId: string) {
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/${importId}`);
+  revalidateDashboardDataCache();
 }
 
 export async function deleteImportFactRow(importId: string, rowId: number) {
@@ -570,6 +574,7 @@ export async function deleteImportFactRow(importId: string, rowId: number) {
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/${importId}`);
+  revalidateDashboardDataCache();
 }
 
 export async function updateImportFactRow(
@@ -732,4 +737,5 @@ export async function updateImportFactRow(
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/${importId}`);
+  revalidateDashboardDataCache();
 }

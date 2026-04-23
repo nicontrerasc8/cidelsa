@@ -22,6 +22,7 @@ import {
   parseImportAudit,
   type ImportAudit,
 } from "@/modules/imports/services/import-audit";
+import { revalidateDashboardDataCache } from "@/modules/dashboard/services/dashboard-source-cache";
 import { importAccessRoles } from "@/modules/imports/services/import-service";
 
 type RecentAccountingImportRow = ImportRecord & {
@@ -520,6 +521,7 @@ export async function saveAccountingImportFromPreview(
 
   revalidatePath("/dashboard/imports");
   revalidatePath("/dashboard");
+  revalidateDashboardDataCache();
 
   return {
     id: importRow.id as string,
@@ -564,6 +566,7 @@ export async function deleteAccountingImport(importId: string) {
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/contabilidad/${importId}`);
+  revalidateDashboardDataCache();
 }
 
 export async function getAccountingImportDetail(importId: string) {
@@ -613,6 +616,7 @@ export async function updateAccountingImportMetadata(
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/contabilidad/${importId}`);
+  revalidateDashboardDataCache();
 }
 
 export async function updateAccountingImportRow(
@@ -695,6 +699,7 @@ export async function updateAccountingImportRow(
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/contabilidad/${importId}`);
+  revalidateDashboardDataCache();
 }
 
 export async function deleteAccountingImportRow(importId: string, rowId: number) {
@@ -732,4 +737,5 @@ export async function deleteAccountingImportRow(importId: string, rowId: number)
 
   revalidatePath("/dashboard/imports");
   revalidatePath(`/dashboard/imports/contabilidad/${importId}`);
+  revalidateDashboardDataCache();
 }

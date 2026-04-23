@@ -1,18 +1,14 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+
 import { executiveDashboardRoles } from "@/lib/auth/roles";
 import { requireRoleAccess } from "@/lib/auth/authorization";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/types/database";
 import {
-  getPayloadNegocio,
-  getPayloadVentasMonto,
-  getPayloadYear,
-  hasFacturacion,
-  isRecord,
-  normalizeText,
-  parseMonthIndex,
-} from "@/modules/dashboard/services/import-payload";
+  DASHBOARD_IMPORTS_TAG,
+  getCachedNormalizedDashboardImportRows,
+} from "@/modules/dashboard/services/dashboard-source-cache";
 
 export type SalesByExecutiveRow = {
   importYear: number | null;
@@ -31,71 +27,47 @@ export type SalesByExecutiveSummary = {
   rows: SalesByExecutiveRow[];
 };
 
-export async function getSalesByExecutiveSummary(): Promise<SalesByExecutiveSummary> {
-  await requireRoleAccess([...executiveDashboardRoles] as AppRole[]);
+const loadSalesByExecutiveSummary = unstable_cache(
+  async (): Promise<SalesByExecutiveSummary> => {
+    const data = await getCachedNormalizedDashboardImportRows();
 
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("imports")
-    .select("data, status")
-    .eq("status", "processed")
-    .order("uploaded_at", { ascending: false });
+    const rows: SalesByExecutiveRow[] = [];
+    const yearSet = new Set<number>();
+    const negocioSet = new Set<string>();
+    const lineaSet = new Set<string>();
+    const ejecutivoSet = new Set<string>();
 
-  if (error || !data) {
-    return {
-      years: [],
-      negocios: [],
-      lineas: [],
-      ejecutivos: [],
-      rows: [],
-    };
-  }
+    for (const row of data) {
+      if (!row.hasFacturacion || !row.ejecutivo || row.ventasMonto === null) continue;
 
-  const rows: SalesByExecutiveRow[] = [];
-  const yearSet = new Set<number>();
-  const negocioSet = new Set<string>();
-  const lineaSet = new Set<string>();
-  const ejecutivoSet = new Set<string>();
-
-  for (const item of data as Array<{ data?: unknown }>) {
-    if (!isRecord(item.data) || !Array.isArray(item.data.rows)) continue;
-
-    for (const rawRow of item.data.rows) {
-      if (!isRecord(rawRow) || !isRecord(rawRow.payload)) continue;
-
-      const payload = rawRow.payload;
-      if (!hasFacturacion(payload)) continue;
-
-      const ejecutivo = normalizeText(payload.ejecutivo);
-      const ventasMonto = getPayloadVentasMonto(payload);
-      const negocio = getPayloadNegocio(payload);
-      const linea = normalizeText(payload.linea);
-      const monthIndex = parseMonthIndex(payload.mes);
-      const importYear = getPayloadYear(payload.anio);
-
-      if (!ejecutivo || ventasMonto === null) continue;
-
-      if (importYear !== null) yearSet.add(importYear);
-      ejecutivoSet.add(ejecutivo);
-      if (negocio) negocioSet.add(negocio);
-      if (linea) lineaSet.add(linea);
+      if (row.importYear !== null) yearSet.add(row.importYear);
+      ejecutivoSet.add(row.ejecutivo);
+      if (row.negocio) negocioSet.add(row.negocio);
+      if (row.linea) lineaSet.add(row.linea);
 
       rows.push({
-        importYear,
-        monthIndex,
-        negocio,
-        linea,
-        ejecutivo,
-        ventasMonto,
+        importYear: row.importYear,
+        monthIndex: row.monthIndex,
+        negocio: row.negocio,
+        linea: row.linea,
+        ejecutivo: row.ejecutivo,
+        ventasMonto: row.ventasMonto,
       });
     }
-  }
 
-  return {
-    years: [...yearSet].sort((a, b) => b - a),
-    negocios: [...negocioSet].sort((a, b) => a.localeCompare(b)),
-    lineas: [...lineaSet].sort((a, b) => a.localeCompare(b)),
-    ejecutivos: [...ejecutivoSet].sort((a, b) => a.localeCompare(b)),
-    rows,
-  };
+    return {
+      years: [...yearSet].sort((a, b) => b - a),
+      negocios: [...negocioSet].sort((a, b) => a.localeCompare(b)),
+      lineas: [...lineaSet].sort((a, b) => a.localeCompare(b)),
+      ejecutivos: [...ejecutivoSet].sort((a, b) => a.localeCompare(b)),
+      rows,
+    };
+  },
+  ["sales-by-executive-summary"],
+  { tags: [DASHBOARD_IMPORTS_TAG] },
+);
+
+export async function getSalesByExecutiveSummary(): Promise<SalesByExecutiveSummary> {
+  await requireRoleAccess([...executiveDashboardRoles] as AppRole[]);
+  return loadSalesByExecutiveSummary();
 }

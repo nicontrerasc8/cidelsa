@@ -30,7 +30,6 @@ import {
   Lightbulb,
   ListOrdered,
   PackageOpen,
-  PieChart as PieChartIcon,
   Target,
   TrendingUp,
 } from "lucide-react";
@@ -42,8 +41,17 @@ const MONTH_ORDER = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Jul
 const CHART_COLORS = ["#38bdf8", "#818cf8", "#fb7185", "#facc15", "#a3e635", "#22d3ee", "#c084fc", "#f97316"] as const;
 
 type VariationRow = VariationsSummary["rows"][number];
-type Totals = { ventas: number; margen: number };
-type MetricRow = { name: string; ventas: number; margen: number; margenPct: number };
+type Totals = { real: number; presupuesto: number; anterior: number; margen: number };
+type MetricRow = {
+  name: string;
+  real: number;
+  presupuesto: number;
+  anterior: number;
+  margen: number;
+  margenPct: number;
+  variacion: number;
+  cumplimiento: number;
+};
 type TabId = "insights" | "matrix" | "table";
 type ColorTone = "blue" | "emerald" | "amber" | "rose";
 
@@ -65,6 +73,8 @@ function marginPct(margen: number, ventas: number) {
 }
 
 function sortPeriodNames(a: string, b: string) {
+  if (a === "Anual") return 1;
+  if (b === "Anual") return -1;
   const indexA = MONTH_ORDER.indexOf(a);
   const indexB = MONTH_ORDER.indexOf(b);
   if (indexA !== -1 || indexB !== -1) return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
@@ -72,7 +82,15 @@ function sortPeriodNames(a: string, b: string) {
 }
 
 function sumRows(rows: VariationRow[]): Totals {
-  return rows.reduce<Totals>((acc, row) => ({ ventas: acc.ventas + row.currentReal, margen: acc.margen + (row.grossMargin ?? 0) }), { ventas: 0, margen: 0 });
+  return rows.reduce<Totals>(
+    (acc, row) => ({
+      real: acc.real + row.currentReal,
+      presupuesto: acc.presupuesto + row.currentBudget,
+      anterior: acc.anterior + row.previousReal,
+      margen: acc.margen + (row.grossMargin ?? 0),
+    }),
+    { real: 0, presupuesto: 0, anterior: 0, margen: 0 },
+  );
 }
 
 function percentChange(current: number, previous: number) {
@@ -84,14 +102,25 @@ function buildMetricRows(rows: VariationRow[], keySelector: (row: VariationRow) 
   const grouped = new Map<string, Totals>();
   for (const row of rows) {
     const key = keySelector(row) || "Sin dato";
-    const current = grouped.get(key) ?? { ventas: 0, margen: 0 };
-    current.ventas += row.currentReal;
+    const current = grouped.get(key) ?? { real: 0, presupuesto: 0, anterior: 0, margen: 0 };
+    current.real += row.currentReal;
+    current.presupuesto += row.currentBudget;
+    current.anterior += row.previousReal;
     current.margen += row.grossMargin ?? 0;
     grouped.set(key, current);
   }
   return [...grouped.entries()]
-    .map<MetricRow>(([name, totals]) => ({ name, ventas: totals.ventas, margen: totals.margen, margenPct: marginPct(totals.margen, totals.ventas) }))
-    .sort((a, b) => b.ventas - a.ventas);
+    .map<MetricRow>(([name, totals]) => ({
+      name,
+      real: totals.real,
+      presupuesto: totals.presupuesto,
+      anterior: totals.anterior,
+      margen: totals.margen,
+      margenPct: marginPct(totals.margen, totals.real),
+      variacion: totals.real - totals.presupuesto,
+      cumplimiento: totals.presupuesto ? (totals.real / totals.presupuesto) * 100 : 0,
+    }))
+    .sort((a, b) => b.real - a.real);
 }
 
 function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -140,7 +169,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           return (
             <div key={`${name}-${item.value}`} className="flex items-center justify-between gap-8">
               <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color || item.fill }} /><span className="text-sm text-slate-300">{name}</span></div>
-              <span className="text-sm font-bold text-white">{name.includes("%") || name === "Crecimiento" ? formatPercent(item.value) : formatCurrency(item.value)}</span>
+              <span className="text-sm font-bold text-white">{name.includes("%") || name === "Crecimiento" || name === "Cumplimiento" ? formatPercent(item.value) : formatCurrency(item.value)}</span>
             </div>
           );
         })}
@@ -208,14 +237,18 @@ export function VariationsDashboard({ summary }: { summary: VariationsSummary })
     const evolution = buildMetricRows(evolutionSource, (row) => selectedYearNumber === null ? String(row.importYear) : row.periodo)
       .sort((a, b) => selectedYearNumber === null ? Number(a.name) - Number(b.name) : sortPeriodNames(a.name, b.name));
 
-    const avgMarginPct = marginPct(totals.margen, totals.ventas);
-    const comparisonMarginPct = marginPct(comparisonTotals.margen, comparisonTotals.ventas);
+    const avgMarginPct = marginPct(totals.margen, totals.real);
+    const comparisonMarginPct = marginPct(comparisonTotals.margen, comparisonTotals.real);
 
     return {
-      totalSales: totals.ventas,
+      totalSales: totals.real,
+      totalBudget: totals.presupuesto,
+      totalPrevious: totals.anterior,
       totalMargin: totals.margen,
       avgMarginPct,
-      salesTrend: percentChange(totals.ventas, comparisonTotals.ventas),
+      budgetVariance: totals.real - totals.presupuesto,
+      budgetAchievement: totals.presupuesto ? (totals.real / totals.presupuesto) * 100 : null,
+      salesTrend: percentChange(totals.real, comparisonTotals.real || totals.anterior),
       marginTrend: percentChange(totals.margen, comparisonTotals.margen),
       efficiencyTrend: comparisonMarginPct ? avgMarginPct - comparisonMarginPct : null,
       business,
@@ -226,6 +259,7 @@ export function VariationsDashboard({ summary }: { summary: VariationsSummary })
 
   const topSalesGroup = metrics.groups[0];
   const topMarginGroup = [...metrics.groups].sort((a, b) => b.margenPct - a.margenPct)[0];
+  const topBudgetGroup = [...metrics.groups].sort((a, b) => b.cumplimiento - a.cumplimiento)[0];
   const yearOptions = useMemo(() => [{ label: "Historico", value: ALL_VALUE }, ...summary.years.map((year) => ({ label: String(year), value: String(year) }))], [summary.years]);
   const periodOptions = useMemo(() => [{ label: "Todos los meses", value: ALL_VALUE }, ...summary.periodos.map((periodo) => ({ label: periodo, value: periodo }))], [summary.periodos]);
   const negocioOptions = useMemo(() => [{ label: "Todos los negocios", value: ALL_VALUE }, ...summary.negocios.map((negocio) => ({ label: negocio, value: negocio }))], [summary.negocios]);
@@ -247,8 +281,8 @@ export function VariationsDashboard({ summary }: { summary: VariationsSummary })
         <header className="mb-10 flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
           <div>
             <div className="flex items-center gap-3 text-blue-400"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10"><LayoutDashboard size={24} /></div><span className="text-sm font-bold uppercase tracking-widest">Business Intelligence</span></div>
-            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">Analisis de Variaciones</h1>
-            <p className="mt-2 text-slate-400">Monitoreo de rentabilidad y eficiencia operativa con datos contables reales.</p>
+            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">Analisis de Presupuesto</h1>
+            <p className="mt-2 text-slate-400">Comparativo entre presupuesto cargado, venta real contable y variaciones por linea.</p>
           </div>
 
           <div className="flex flex-wrap gap-3 rounded-3xl border border-slate-800 bg-slate-900/50 p-2 backdrop-blur-md">
@@ -261,10 +295,10 @@ export function VariationsDashboard({ summary }: { summary: VariationsSummary })
         </header>
 
         <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard title="Ventas Totales" value={formatFullCurrency(metrics.totalSales)} icon={BarChart3} trend={metrics.salesTrend} subtext="vs año anterior comparable" color="blue" />
-          <KpiCard title="Margen Bruto" value={formatFullCurrency(metrics.totalMargin)} icon={TrendingUp} trend={metrics.marginTrend} subtext="Ganancia operativa" color="emerald" />
-          <KpiCard title="Eficiencia M.B." value={formatPercent(metrics.avgMarginPct)} icon={PieChartIcon} trend={metrics.efficiencyTrend} subtext="Puntos vs año anterior" color="amber" />
-          <KpiCard title="Grupos de Negocio" value={metrics.groups.length} icon={PackageOpen} subtext="Unidades operativas visibles" color="rose" />
+          <KpiCard title="Venta Real" value={formatFullCurrency(metrics.totalSales)} icon={BarChart3} trend={metrics.salesTrend} subtext="Facturacion real contable" color="blue" />
+          <KpiCard title="Presupuesto" value={formatFullCurrency(metrics.totalBudget)} icon={Target} subtext="Plan cargado desde presupuesto" color="amber" />
+          <KpiCard title="Cumplimiento" value={formatPercent(metrics.budgetAchievement)} icon={TrendingUp} trend={metrics.budgetAchievement ? metrics.budgetAchievement - 100 : null} subtext="Real sobre presupuesto" color="emerald" />
+          <KpiCard title="Variacion" value={formatFullCurrency(metrics.budgetVariance)} icon={PackageOpen} subtext="Real menos presupuesto" color={metrics.budgetVariance >= 0 ? "emerald" : "rose"} />
         </div>
 
         <div className="mb-6 flex w-fit gap-1 rounded-2xl border border-slate-800 bg-slate-900/30 p-1">
@@ -275,32 +309,32 @@ export function VariationsDashboard({ summary }: { summary: VariationsSummary })
           {activeTab === "insights" ? (
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
               <Card className="lg:col-span-8">
-                <div className="p-8 pb-0"><h3 className="text-xl font-bold text-white">Evolucion Comercial</h3><p className="text-sm text-slate-500">Volumen de ventas contra margen porcentual por periodo.</p></div>
+                <div className="p-8 pb-0"><h3 className="text-xl font-bold text-white">Real vs Presupuesto</h3><p className="text-sm text-slate-500">Venta real, presupuesto y cumplimiento por periodo.</p></div>
                 <div className="h-[400px] w-full p-4">
-                  {metrics.evolution.length ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={metrics.evolution}><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={1} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.6} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} /><XAxis dataKey="name" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} /><YAxis yAxisId="left" stroke="#64748b" axisLine={false} tickLine={false} tickFormatter={(value) => formatCurrency(Number(value))} tick={{ fontSize: 12 }} /><YAxis yAxisId="right" orientation="right" stroke="#10b981" axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12 }} /><Tooltip content={<CustomTooltip />} /><Bar yAxisId="left" dataKey="ventas" name="Ventas" fill="url(#barGradient)" radius={[8, 8, 0, 0]} barSize={40} /><Line yAxisId="right" type="monotone" dataKey="margenPct" name="Margen %" stroke="#10b981" strokeWidth={4} dot={{ r: 6, fill: "#0f172a", strokeWidth: 3 }} /></ComposedChart></ResponsiveContainer> : <EmptyState>No hay datos para los filtros seleccionados.</EmptyState>}
+                  {metrics.evolution.length ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={metrics.evolution}><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={1} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.6} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} /><XAxis dataKey="name" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} /><YAxis yAxisId="left" stroke="#64748b" axisLine={false} tickLine={false} tickFormatter={(value) => formatCurrency(Number(value))} tick={{ fontSize: 12 }} /><YAxis yAxisId="right" orientation="right" stroke="#10b981" axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12 }} /><Tooltip content={<CustomTooltip />} /><Bar yAxisId="left" dataKey="presupuesto" name="Presupuesto" fill="#facc15" fillOpacity={0.45} radius={[8, 8, 0, 0]} barSize={40} /><Bar yAxisId="left" dataKey="real" name="Real" fill="url(#barGradient)" radius={[8, 8, 0, 0]} barSize={28} /><Line yAxisId="right" type="monotone" dataKey="cumplimiento" name="Cumplimiento" stroke="#10b981" strokeWidth={4} dot={{ r: 6, fill: "#0f172a", strokeWidth: 3 }} /></ComposedChart></ResponsiveContainer> : <EmptyState>No hay datos para los filtros seleccionados.</EmptyState>}
                 </div>
               </Card>
 
               <Card className="lg:col-span-4">
                 <div className="p-8 pb-0 text-center"><h3 className="text-xl font-bold text-white">Share por Negocio</h3><p className="text-sm text-slate-500">Distribucion porcentual de ingresos.</p></div>
                 <div className="h-[350px] w-full">
-                  {metrics.business.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={metrics.business} innerRadius={80} outerRadius={110} paddingAngle={5} dataKey="ventas" nameKey="name">{metrics.business.map((entry, index) => <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart></ResponsiveContainer> : <EmptyState>No hay negocios visibles.</EmptyState>}
+                  {metrics.business.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={metrics.business} innerRadius={80} outerRadius={110} paddingAngle={5} dataKey="real" nameKey="name">{metrics.business.map((entry, index) => <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart></ResponsiveContainer> : <EmptyState>No hay negocios visibles.</EmptyState>}
                 </div>
                 <div className="flex flex-wrap justify-center gap-4 p-6 pt-0">{metrics.business.map((business, index) => <div key={business.name} className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} /><span className="text-xs font-medium">{business.name}</span></div>)}</div>
               </Card>
 
               <div className="grid grid-cols-1 gap-6 lg:col-span-12 md:grid-cols-3">
-                <Card className="border-l-4 border-l-blue-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-blue-500/10 p-3 text-blue-400"><Lightbulb size={24} /></div><div><h4 className="font-bold text-white">Lider de Ventas</h4><p className="mt-1 text-sm text-slate-400">{topSalesGroup?.name ?? "N/A"} concentra el mayor volumen.</p></div></div></Card>
+                <Card className="border-l-4 border-l-blue-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-blue-500/10 p-3 text-blue-400"><Lightbulb size={24} /></div><div><h4 className="font-bold text-white">Lider de Ventas</h4><p className="mt-1 text-sm text-slate-400">{topSalesGroup?.name ?? "N/A"} concentra el mayor volumen real.</p></div></div></Card>
                 <Card className="border-l-4 border-l-emerald-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-emerald-500/10 p-3 text-emerald-400"><TrendingUp size={24} /></div><div><h4 className="font-bold text-white">Top Eficiencia</h4><p className="mt-1 text-sm text-slate-400">{topMarginGroup?.name ?? "N/A"} tiene el mejor margen.</p></div></div></Card>
-                <Card className="border-l-4 border-l-amber-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-amber-500/10 p-3 text-amber-400"><AlertCircle size={24} /></div><div><h4 className="font-bold text-white">Promedio Global</h4><p className="mt-1 text-sm text-slate-400">El margen medio de la operacion es {formatPercent(metrics.avgMarginPct)}.</p></div></div></Card>
+                <Card className="border-l-4 border-l-amber-500 p-6"><div className="flex items-start gap-4"><div className="rounded-full bg-amber-500/10 p-3 text-amber-400"><AlertCircle size={24} /></div><div><h4 className="font-bold text-white">Mayor Cumplimiento</h4><p className="mt-1 text-sm text-slate-400">{topBudgetGroup?.name ?? "N/A"} lidera contra presupuesto.</p></div></div></Card>
               </div>
             </div>
           ) : null}
 
           {activeTab === "matrix" ? (
             <Card className="p-8">
-              <div className="mb-8"><h3 className="text-2xl font-bold text-white">Matriz de Segmentacion Estrategica</h3><p className="mt-2 text-slate-500">Correlacion entre volumen de ventas y rentabilidad.</p><div className="mt-4 flex flex-wrap gap-6"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-emerald-500" /><span className="text-xs">Sobre promedio</span></div><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-rose-500" /><span className="text-xs">Bajo promedio</span></div></div></div>
-              <div className="h-[500px] w-full">{metrics.groups.length ? <ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}><CartesianGrid strokeDasharray="3 3" stroke="#1e293b" /><XAxis type="number" dataKey="ventas" name="Ventas" stroke="#64748b" tickFormatter={(value) => formatCurrency(Number(value))} label={{ value: "Volumen de Ventas (PEN)", position: "bottom", offset: 20, fill: "#64748b", fontSize: 12 }} /><YAxis type="number" dataKey="margenPct" name="Margen %" stroke="#64748b" tickFormatter={(value) => `${value}%`} label={{ value: "Rentabilidad (%)", angle: -90, position: "left", fill: "#64748b", fontSize: 12 }} /><ZAxis type="number" dataKey="margen" range={[100, 1000]} /><Tooltip content={<CustomTooltip />} /><ReferenceLine y={metrics.avgMarginPct} stroke="#facc15" strokeDasharray="5 5" label={{ value: "M.B. Promedio", position: "insideBottomRight", fill: "#facc15", fontSize: 10 }} /><Scatter name="Grupos" data={metrics.groups}>{metrics.groups.map((entry) => <Cell key={entry.name} fill={entry.margenPct >= metrics.avgMarginPct ? "#10b981" : "#f43f5e"} fillOpacity={0.6} stroke={entry.margenPct >= metrics.avgMarginPct ? "#10b981" : "#f43f5e"} strokeWidth={2} />)}</Scatter></ScatterChart></ResponsiveContainer> : <EmptyState>No hay datos suficientes para la matriz.</EmptyState>}</div>
+              <div className="mb-8"><h3 className="text-2xl font-bold text-white">Matriz de Cumplimiento</h3><p className="mt-2 text-slate-500">Correlacion entre venta real y cumplimiento del presupuesto.</p><div className="mt-4 flex flex-wrap gap-6"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-emerald-500" /><span className="text-xs">Sobre promedio</span></div><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-rose-500" /><span className="text-xs">Bajo promedio</span></div></div></div>
+              <div className="h-[500px] w-full">{metrics.groups.length ? <ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}><CartesianGrid strokeDasharray="3 3" stroke="#1e293b" /><XAxis type="number" dataKey="real" name="Real" stroke="#64748b" tickFormatter={(value) => formatCurrency(Number(value))} label={{ value: "Volumen de Ventas (PEN)", position: "bottom", offset: 20, fill: "#64748b", fontSize: 12 }} /><YAxis type="number" dataKey="cumplimiento" name="Cumplimiento" stroke="#64748b" tickFormatter={(value) => `${value}%`} label={{ value: "Cumplimiento (%)", angle: -90, position: "left", fill: "#64748b", fontSize: 12 }} /><ZAxis type="number" dataKey="margen" range={[100, 1000]} /><Tooltip content={<CustomTooltip />} /><ReferenceLine y={100} stroke="#facc15" strokeDasharray="5 5" label={{ value: "100% Presupuesto", position: "insideBottomRight", fill: "#facc15", fontSize: 10 }} /><Scatter name="Grupos" data={metrics.groups}>{metrics.groups.map((entry) => <Cell key={entry.name} fill={entry.cumplimiento >= 100 ? "#10b981" : "#f43f5e"} fillOpacity={0.6} stroke={entry.cumplimiento >= 100 ? "#10b981" : "#f43f5e"} strokeWidth={2} />)}</Scatter></ScatterChart></ResponsiveContainer> : <EmptyState>No hay datos suficientes para la matriz.</EmptyState>}</div>
             </Card>
           ) : null}
 
@@ -309,13 +343,13 @@ export function VariationsDashboard({ summary }: { summary: VariationsSummary })
               <div className="border-b border-slate-700 bg-slate-800/50 p-6"><h3 className="text-xl font-bold text-white">Analisis Detallado por Grupo</h3><p className="text-sm text-slate-500">Listado de rendimiento filtrado por criterios actuales.</p></div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-900/80 text-xs font-bold uppercase tracking-widest text-slate-500"><tr><th className="px-8 py-5">Grupo</th><th className="px-8 py-5 text-right">Ventas</th><th className="px-8 py-5 text-right">Margen Bruto</th><th className="px-8 py-5 text-right">Margen %</th><th className="px-8 py-5 text-right">Status</th></tr></thead>
+                  <thead className="bg-slate-900/80 text-xs font-bold uppercase tracking-widest text-slate-500"><tr><th className="px-8 py-5">Grupo</th><th className="px-8 py-5 text-right">Real</th><th className="px-8 py-5 text-right">Presupuesto</th><th className="px-8 py-5 text-right">Variacion</th><th className="px-8 py-5 text-right">Cumplimiento</th><th className="px-8 py-5 text-right">Status</th></tr></thead>
                   <tbody className="divide-y divide-slate-800">
                     {metrics.groups.length ? metrics.groups.map((group) => {
-                      const isHighPerf = group.margenPct >= metrics.avgMarginPct;
-                      const isCritical = group.margenPct < 15;
-                      return <tr key={group.name} className="transition-colors hover:bg-white/5"><td className="px-8 py-5 font-bold text-white">{group.name}</td><td className="px-8 py-5 text-right tabular-nums">{formatFullCurrency(group.ventas)}</td><td className="px-8 py-5 text-right tabular-nums text-slate-400">{formatFullCurrency(group.margen)}</td><td className={`px-8 py-5 text-right tabular-nums font-bold ${isHighPerf ? "text-emerald-400" : "text-rose-400"}`}>{formatPercent(group.margenPct)}</td><td className="px-8 py-5 text-right"><span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${isCritical ? "bg-rose-500/10 text-rose-500" : isHighPerf ? "bg-emerald-500/10 text-emerald-500" : "bg-slate-500/10 text-slate-500"}`}>{isCritical ? "Critico" : isHighPerf ? "Eficiente" : "Regular"}</span></td></tr>;
-                    }) : <tr><td colSpan={5} className="px-8 py-12 text-center text-slate-500">No hay datos para mostrar.</td></tr>}
+                      const isHighPerf = group.cumplimiento >= 100;
+                      const isCritical = group.presupuesto > 0 && group.cumplimiento < 80;
+                      return <tr key={group.name} className="transition-colors hover:bg-white/5"><td className="px-8 py-5 font-bold text-white">{group.name}</td><td className="px-8 py-5 text-right tabular-nums">{formatFullCurrency(group.real)}</td><td className="px-8 py-5 text-right tabular-nums text-slate-400">{formatFullCurrency(group.presupuesto)}</td><td className={`px-8 py-5 text-right tabular-nums font-bold ${group.variacion >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{formatFullCurrency(group.variacion)}</td><td className={`px-8 py-5 text-right tabular-nums font-bold ${isHighPerf ? "text-emerald-400" : "text-rose-400"}`}>{formatPercent(group.cumplimiento)}</td><td className="px-8 py-5 text-right"><span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${isCritical ? "bg-rose-500/10 text-rose-500" : isHighPerf ? "bg-emerald-500/10 text-emerald-500" : "bg-slate-500/10 text-slate-500"}`}>{isCritical ? "Critico" : isHighPerf ? "Eficiente" : "Regular"}</span></td></tr>;
+                    }) : <tr><td colSpan={6} className="px-8 py-12 text-center text-slate-500">No hay datos para mostrar.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -328,3 +362,6 @@ export function VariationsDashboard({ summary }: { summary: VariationsSummary })
     </div>
   );
 }
+
+
+

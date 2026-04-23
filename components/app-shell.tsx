@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   BriefcaseBusiness,
   Building2,
@@ -8,6 +8,8 @@ import {
   GitCompareArrows,
   LogOut,
   Menu,
+  RefreshCw,
+  Target,
   TrendingUp,
   UploadCloud,
   User,
@@ -16,13 +18,29 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { canAccessSidebarPath, roleLabels } from "@/lib/auth/roles";
 import type { CurrentUser } from "@/lib/auth/session";
 import { logoutAction } from "@/modules/auth/server/actions";
+import { refreshDashboardDataAction } from "@/modules/dashboard/server/actions";
 
 const navigation = [
+  // {
+  //   href: "/dashboard/salud-negocio",
+  //   label: "Salud del Negocio",
+  //   icon: HeartPulse,
+  // },
+  // {
+  //   href: "/dashboard/volatilidad",
+  //   label: "Volatilidad",
+  //   icon: Activity,
+  // },
+  // {
+  //   href: "/dashboard/cohortes-clientes",
+  //   label: "Cohortes Clientes",
+  //   icon: Radar,
+  // },
   {
     href: "/dashboard/ventas-clientes",
     label: "Ventas por Cliente",
@@ -54,9 +72,14 @@ const navigation = [
     icon: UserRound,
   },
   {
-    href: "/dashboard/variaciones",
+    href: "/dashboard/contabilidad",
     label: "Contabilidad",
     icon: GitCompareArrows,
+  },
+  {
+    href: "/dashboard/presupuestos",
+    label: "Presupuestos",
+    icon: Target,
   },
   {
     href: "/dashboard/imports",
@@ -113,6 +136,25 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const visibleNavigation = navigation.filter((item) => canAccessSidebarPath(user.role, item.href));
+  const router = useRouter();
+  const [isRefreshing, startRefreshing] = useTransition();
+  const prefetchTargets = useMemo(
+    () => visibleNavigation.map((item) => item.href).filter((href) => href !== pathname),
+    [pathname, visibleNavigation],
+  );
+
+  useEffect(() => {
+    for (const href of prefetchTargets) {
+      router.prefetch(href);
+    }
+  }, [prefetchTargets, router]);
+
+  function handleRefresh() {
+    startRefreshing(async () => {
+      await refreshDashboardDataAction();
+      router.refresh();
+    });
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-between gap-6">
@@ -127,6 +169,16 @@ function SidebarContent({
         </div>
 
         <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
+          >
+            <RefreshCw className={["size-4", isRefreshing ? "animate-spin" : ""].join(" ")} />
+            {isRefreshing ? "Refrescando..." : "Refrescar datos"}
+          </button>
+
           {visibleNavigation.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);
 
@@ -134,6 +186,7 @@ function SidebarContent({
               <Link
                 key={href}
                 href={href}
+                prefetch
                 onClick={onNavigate}
                 className={[
                   "group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition",

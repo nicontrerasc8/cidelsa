@@ -133,6 +133,22 @@ create table if not exists public.accounting_imports (
   data jsonb not null default '{}'::jsonb
 );
 
+create table if not exists public.budget_imports (
+  id uuid primary key default gen_random_uuid(),
+  file_name text not null,
+  storage_path text unique,
+  anio integer not null,
+  sheet_name text,
+  uploaded_by uuid not null references public.profiles(id),
+  uploaded_at timestamptz not null default timezone('utc', now()),
+  status public.import_status not null default 'pending',
+  total_rows integer not null default 0,
+  valid_rows integer not null default 0,
+  error_rows integer not null default 0,
+  notes text,
+  data jsonb not null default '{}'::jsonb
+);
+
 alter table public.imports add column if not exists anio integer;
 alter table public.imports add column if not exists sheet_name text;
 alter table public.imports add column if not exists data jsonb not null default '{}'::jsonb;
@@ -230,6 +246,8 @@ create index if not exists idx_imports_uploaded_by on public.imports(uploaded_by
 create index if not exists idx_imports_anio on public.imports(anio, uploaded_at desc);
 create index if not exists idx_accounting_imports_uploaded_by on public.accounting_imports(uploaded_by, uploaded_at desc);
 create index if not exists idx_accounting_imports_anio on public.accounting_imports(anio, uploaded_at desc);
+create index if not exists idx_budget_imports_uploaded_by on public.budget_imports(uploaded_by, uploaded_at desc);
+create index if not exists idx_budget_imports_anio on public.budget_imports(anio, uploaded_at desc);
 create index if not exists idx_raw_ax_rows_import_id on public.raw_ax_rows(import_id, row_number);
 create index if not exists idx_raw_ax_rows_payload_gin on public.raw_ax_rows using gin(payload);
 create index if not exists idx_fact_comercial_dates on public.fact_comercial(anio, mes, fecha_registro);
@@ -351,6 +369,7 @@ alter table public.profiles enable row level security;
 alter table public.user_scopes enable row level security;
 alter table public.imports enable row level security;
 alter table public.accounting_imports enable row level security;
+alter table public.budget_imports enable row level security;
 alter table public.raw_ax_rows enable row level security;
 alter table public.dim_clientes enable row level security;
 alter table public.dim_sectores enable row level security;
@@ -402,6 +421,22 @@ using (
 
 create policy "accounting_imports_insert_uploaders"
 on public.accounting_imports for insert
+to authenticated
+with check (
+  uploaded_by = auth.uid() and public.can_upload_imports()
+);
+
+create policy "budget_imports_role_access"
+on public.budget_imports for select
+to authenticated
+using (
+  uploaded_by = auth.uid()
+  or public.can_upload_imports()
+  or public.is_managerial_role()
+);
+
+create policy "budget_imports_insert_uploaders"
+on public.budget_imports for insert
 to authenticated
 with check (
   uploaded_by = auth.uid() and public.can_upload_imports()

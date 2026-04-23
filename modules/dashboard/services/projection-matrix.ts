@@ -1,22 +1,14 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+
 import { executiveDashboardRoles } from "@/lib/auth/roles";
 import { requireRoleAccess } from "@/lib/auth/authorization";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/types/database";
 import {
-  getPayloadCliente,
-  getPayloadEjecutivo,
-  getPayloadNegocio,
-  getPayloadPipeline,
-  getPayloadPipelineMonto,
-  getPayloadYear,
-  isRecord,
-  normalizeComparableText,
-  normalizeSituation,
-  normalizeText,
-  parseMonthIndex,
-} from "@/modules/dashboard/services/import-payload";
+  DASHBOARD_IMPORTS_TAG,
+  getCachedNormalizedDashboardImportRows,
+} from "@/modules/dashboard/services/dashboard-source-cache";
 
 export type ProjectionMatrixSummary = {
   years: number[];
@@ -38,78 +30,56 @@ export type ProjectionMatrixSummary = {
   }>;
 };
 
-export async function getProjectionMatrixSummary(): Promise<ProjectionMatrixSummary> {
-  await requireRoleAccess([...executiveDashboardRoles] as AppRole[]);
+const loadProjectionMatrixSummary = unstable_cache(
+  async (): Promise<ProjectionMatrixSummary> => {
+    const data = await getCachedNormalizedDashboardImportRows();
 
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("imports")
-    .select("data, status")
-    .eq("status", "processed");
+    const negocioSet = new Set<string>();
+    const yearSet = new Set<number>();
+    const situacionSet = new Set<string>();
+    const etapaSet = new Set<string>();
+    const ejecutivoSet = new Set<string>();
+    const lineaSet = new Set<string>();
+    const rows: ProjectionMatrixSummary["rows"] = [];
 
-  if (error || !data) {
-    return { years: [], negocios: [], situaciones: [], etapas: [], ejecutivos: [], lineas: [], rows: [] };
-  }
+    for (const row of data) {
+      if (row.tipoPipeline === "backlog" || row.pipelineMonto === null) continue;
 
-  const negocioSet = new Set<string>();
-  const yearSet = new Set<number>();
-  const situacionSet = new Set<string>();
-  const etapaSet = new Set<string>();
-  const ejecutivoSet = new Set<string>();
-  const lineaSet = new Set<string>();
-  const rows: ProjectionMatrixSummary["rows"] = [];
-
-  for (const item of data as Array<{ data?: unknown }>) {
-    if (!isRecord(item.data) || !Array.isArray(item.data.rows)) continue;
-
-    for (const rawRow of item.data.rows) {
-      if (!isRecord(rawRow) || !isRecord(rawRow.payload)) continue;
-
-      const payload = rawRow.payload;
-      const tipoPipeline = getPayloadPipeline(payload);
-      const pipelineMonto = getPayloadPipelineMonto(payload);
-
-      if (tipoPipeline === "backlog") continue;
-
-      const negocio = getPayloadNegocio(payload);
-      const importYear = getPayloadYear(payload.anio);
-      const linea = normalizeText(payload.linea);
-      const cliente = getPayloadCliente(payload);
-      const etapa = normalizeComparableText(payload.etapa);
-      const situacion = normalizeSituation(payload.situacion);
-      const ejecutivo = getPayloadEjecutivo(payload);
-      const monthIndex = parseMonthIndex(payload.mes);
-      const ventasMonto = pipelineMonto;
-
-      if (ventasMonto === null) continue;
-      if (importYear !== null) yearSet.add(importYear);
-      if (negocio) negocioSet.add(negocio);
-      if (etapa) etapaSet.add(etapa);
-      if (situacion) situacionSet.add(situacion);
-      if (ejecutivo) ejecutivoSet.add(ejecutivo);
-      if (linea) lineaSet.add(linea);
+      if (row.importYear !== null) yearSet.add(row.importYear);
+      if (row.negocio) negocioSet.add(row.negocio);
+      if (row.etapa) etapaSet.add(row.etapa);
+      if (row.situacion) situacionSet.add(row.situacion);
+      if (row.ejecutivo) ejecutivoSet.add(row.ejecutivo);
+      if (row.linea) lineaSet.add(row.linea);
 
       rows.push({
-        importYear,
-        negocio,
-        linea,
-        cliente,
-        etapa,
-        situacion,
-        ejecutivo,
-        monthIndex,
-        ventasMonto,
+        importYear: row.importYear,
+        negocio: row.negocio,
+        linea: row.linea,
+        cliente: row.cliente,
+        etapa: row.etapa,
+        situacion: row.situacion,
+        ejecutivo: row.ejecutivo,
+        monthIndex: row.monthIndex,
+        ventasMonto: row.pipelineMonto,
       });
     }
-  }
 
-  return {
-    years: [...yearSet].sort((a, b) => b - a),
-    negocios: [...negocioSet].sort((a, b) => a.localeCompare(b)),
-    situaciones: [...situacionSet].sort((a, b) => a.localeCompare(b)),
-    etapas: [...etapaSet].sort((a, b) => a.localeCompare(b)),
-    ejecutivos: [...ejecutivoSet].sort((a, b) => a.localeCompare(b)),
-    lineas: [...lineaSet].sort((a, b) => a.localeCompare(b)),
-    rows,
-  };
+    return {
+      years: [...yearSet].sort((a, b) => b - a),
+      negocios: [...negocioSet].sort((a, b) => a.localeCompare(b)),
+      situaciones: [...situacionSet].sort((a, b) => a.localeCompare(b)),
+      etapas: [...etapaSet].sort((a, b) => a.localeCompare(b)),
+      ejecutivos: [...ejecutivoSet].sort((a, b) => a.localeCompare(b)),
+      lineas: [...lineaSet].sort((a, b) => a.localeCompare(b)),
+      rows,
+    };
+  },
+  ["projection-matrix-summary"],
+  { tags: [DASHBOARD_IMPORTS_TAG] },
+);
+
+export async function getProjectionMatrixSummary(): Promise<ProjectionMatrixSummary> {
+  await requireRoleAccess([...executiveDashboardRoles] as AppRole[]);
+  return loadProjectionMatrixSummary();
 }
