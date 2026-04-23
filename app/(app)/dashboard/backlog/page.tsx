@@ -1,4 +1,5 @@
 import { forbidden } from "next/navigation";
+import { connection } from "next/server";
 
 import { canAccessExecutiveDashboards } from "@/lib/auth/roles";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -6,6 +7,8 @@ import { BacklogMatrixDashboard } from "@/modules/dashboard/components/backlog-m
 import { getBacklogMatrixSummary } from "@/modules/dashboard/services/backlog-matrix";
 
 export default async function BacklogPage() {
+  await connection();
+
   const user = await getCurrentUser();
 
   if (!user || !canAccessExecutiveDashboards(user.role)) {

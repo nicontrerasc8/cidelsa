@@ -79,21 +79,17 @@ function parseYearFromDate(value: string | null) {
   return parsed.getFullYear();
 }
 
-const loadProcessedImports = unstable_cache(
-  async (): Promise<CachedImportSourceRow[]> => {
-    const admin = createAdminSupabaseClient();
-    const { data, error } = await admin
-      .from("imports")
-      .select("anio, data")
-      .eq("status", "processed")
-      .order("uploaded_at", { ascending: false });
+async function loadProcessedImports(): Promise<CachedImportSourceRow[]> {
+  const admin = createAdminSupabaseClient();
+  const { data, error } = await admin
+    .from("imports")
+    .select("anio, data")
+    .eq("status", "processed")
+    .order("uploaded_at", { ascending: false });
 
-    if (error || !data) return [];
-    return data as CachedImportSourceRow[];
-  },
-  ["dashboard-processed-imports"],
-  { tags: [DASHBOARD_IMPORTS_TAG] },
-);
+  if (error || !data) return [];
+  return data as CachedImportSourceRow[];
+}
 
 const loadProcessedAccountingImports = unstable_cache(
   async (): Promise<CachedFinancialSourceRow[]> => {
@@ -127,46 +123,42 @@ const loadProcessedBudgetImports = unstable_cache(
   { tags: [DASHBOARD_BUDGET_TAG] },
 );
 
-const loadNormalizedDashboardImportRows = unstable_cache(
-  async (): Promise<CachedDashboardImportRow[]> => {
-    const data = await loadProcessedImports();
-    const rows: CachedDashboardImportRow[] = [];
+async function loadNormalizedDashboardImportRows(): Promise<CachedDashboardImportRow[]> {
+  const data = await loadProcessedImports();
+  const rows: CachedDashboardImportRow[] = [];
 
-    for (const item of data) {
-      if (!isRecord(item.data) || !Array.isArray(item.data.rows)) continue;
+  for (const item of data) {
+    if (!isRecord(item.data) || !Array.isArray(item.data.rows)) continue;
 
-      for (const rawRow of item.data.rows) {
-        if (!isRecord(rawRow) || !isRecord(rawRow.payload)) continue;
+    for (const rawRow of item.data.rows) {
+      if (!isRecord(rawRow) || !isRecord(rawRow.payload)) continue;
 
-        const payload = rawRow.payload;
-        const fechaFacturacion = normalizeText(payload.fecha_facturacion);
-        const importYear = getPayloadYear(payload.anio) ?? item.anio;
+      const payload = rawRow.payload;
+      const fechaFacturacion = normalizeText(payload.fecha_facturacion);
+      const importYear = getPayloadYear(payload.anio) ?? item.anio;
 
-        rows.push({
-          importYear,
-          activityYear: parseYearFromDate(fechaFacturacion) ?? importYear,
-          monthIndex: parseMonthIndex(payload.mes),
-          cliente: getPayloadCliente(payload),
-          negocio: getPayloadNegocio(payload),
-          linea: normalizeText(payload.linea),
-          ejecutivo: getPayloadEjecutivo(payload),
-          comparableEjecutivo: normalizeComparableText(payload.ejecutivo),
-          etapa: normalizeComparableText(payload.etapa),
-          situacion: normalizeSituation(payload.situacion),
-          tipoPipeline: getPayloadPipeline(payload),
-          ventasMonto: getPayloadVentasMonto(payload),
-          pipelineMonto: getPayloadPipelineMonto(payload),
-          fechaFacturacion,
-          hasFacturacion: hasFacturacion(payload),
-        });
-      }
+      rows.push({
+        importYear,
+        activityYear: parseYearFromDate(fechaFacturacion) ?? importYear,
+        monthIndex: parseMonthIndex(payload.mes),
+        cliente: getPayloadCliente(payload),
+        negocio: getPayloadNegocio(payload),
+        linea: normalizeText(payload.linea),
+        ejecutivo: getPayloadEjecutivo(payload),
+        comparableEjecutivo: normalizeComparableText(payload.ejecutivo),
+        etapa: normalizeComparableText(payload.etapa),
+        situacion: normalizeSituation(payload.situacion),
+        tipoPipeline: getPayloadPipeline(payload),
+        ventasMonto: getPayloadVentasMonto(payload),
+        pipelineMonto: getPayloadPipelineMonto(payload),
+        fechaFacturacion,
+        hasFacturacion: hasFacturacion(payload),
+      });
     }
+  }
 
-    return rows;
-  },
-  ["dashboard-normalized-import-rows"],
-  { tags: [DASHBOARD_IMPORTS_TAG] },
-);
+  return rows;
+}
 
 export async function getCachedProcessedImports() {
   return loadProcessedImports();

@@ -1,4 +1,5 @@
 import { forbidden } from "next/navigation";
+import { connection } from "next/server";
 
 import { canAccessExecutiveDashboards } from "@/lib/auth/roles";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -6,6 +7,8 @@ import { BacklogMatrixDashboard } from "@/modules/dashboard/components/backlog-m
 import { getProjectionMatrixSummary } from "@/modules/dashboard/services/projection-matrix";
 
 export default async function ProjectionPage() {
+  await connection();
+
   const user = await getCurrentUser();
 
   if (!user || !canAccessExecutiveDashboards(user.role)) {
@@ -25,7 +28,6 @@ export default async function ProjectionPage() {
       emptyLabel="No hay proyección para el negocio seleccionado."
       totalVisibleLabel="Total proyección visible:"
       showSituacionBreakdown={false}
-      defaultEtapaValue="informacion"
     />
   );
 }

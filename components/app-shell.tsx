@@ -51,16 +51,16 @@ const navigation = [
     label: "Comparativo Anual",
     icon: TrendingUp,
   },
-  {
-    href: "/dashboard/backlog",
-    label: "Backlog",
-    icon: FolderKanban,
-  },
-  {
-    href: "/dashboard/proyeccion",
-    label: "Proyeccion",
-    icon: FolderKanban,
-  },
+  // {
+  //   href: "/dashboard/backlog",
+  //   label: "Backlog",
+  //   icon: FolderKanban,
+  // },
+  // {
+  //   href: "/dashboard/proyeccion",
+  //   label: "Proyeccion",
+  //   icon: FolderKanban,
+  // },
   {
     href: "/dashboard/facturacion-linea",
     label: "Facturacion por Linea",
@@ -169,15 +169,7 @@ function SidebarContent({
         </div>
 
         <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
-          >
-            <RefreshCw className={["size-4", isRefreshing ? "animate-spin" : ""].join(" ")} />
-            {isRefreshing ? "Refrescando..." : "Refrescar datos"}
-          </button>
+   
 
           {visibleNavigation.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);

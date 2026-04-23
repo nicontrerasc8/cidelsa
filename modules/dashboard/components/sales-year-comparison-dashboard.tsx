@@ -150,9 +150,9 @@ function CustomTooltip({
         </p>
       ) : null}
       <div className="space-y-2">
-        {payload.map((item) => (
+        {payload.map((item, index) => (
           <div
-            key={`${item.name}-${item.value}`}
+            key={`${String(item.name)}-${String(item.value)}-${index}`}
             className="flex items-center justify-between gap-6"
           >
             <div className="flex items-center gap-2 text-sm text-white/78">
