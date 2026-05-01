@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { revalidateTag, unstable_cache } from "next/cache";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -79,7 +80,7 @@ function parseYearFromDate(value: string | null) {
   return parsed.getFullYear();
 }
 
-async function loadProcessedImports(): Promise<CachedImportSourceRow[]> {
+const loadProcessedImports = cache(async (): Promise<CachedImportSourceRow[]> => {
   const admin = createAdminSupabaseClient();
   const { data, error } = await admin
     .from("imports")
@@ -89,7 +90,7 @@ async function loadProcessedImports(): Promise<CachedImportSourceRow[]> {
 
   if (error || !data) return [];
   return data as CachedImportSourceRow[];
-}
+});
 
 const loadProcessedAccountingImports = unstable_cache(
   async (): Promise<CachedFinancialSourceRow[]> => {
@@ -123,7 +124,7 @@ const loadProcessedBudgetImports = unstable_cache(
   { tags: [DASHBOARD_BUDGET_TAG] },
 );
 
-async function loadNormalizedDashboardImportRows(): Promise<CachedDashboardImportRow[]> {
+const loadNormalizedDashboardImportRows = cache(async (): Promise<CachedDashboardImportRow[]> => {
   const data = await loadProcessedImports();
   const rows: CachedDashboardImportRow[] = [];
 
@@ -158,7 +159,7 @@ async function loadNormalizedDashboardImportRows(): Promise<CachedDashboardImpor
   }
 
   return rows;
-}
+});
 
 export async function getCachedProcessedImports() {
   return loadProcessedImports();

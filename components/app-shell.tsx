@@ -2,19 +2,12 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
-  BriefcaseBusiness,
   Building2,
-  FolderKanban,
-  GitCompareArrows,
   LogOut,
+  LayoutDashboard,
   Menu,
   RefreshCw,
-  Target,
-  TrendingUp,
   UploadCloud,
-  User,
-  UserRound,
-  UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,102 +19,22 @@ import { logoutAction } from "@/modules/auth/server/actions";
 import { refreshDashboardDataAction } from "@/modules/dashboard/server/actions";
 
 const navigation = [
-  // {
-  //   href: "/dashboard/salud-negocio",
-  //   label: "Salud del Negocio",
-  //   icon: HeartPulse,
-  // },
-  // {
-  //   href: "/dashboard/volatilidad",
-  //   label: "Volatilidad",
-  //   icon: Activity,
-  // },
-  // {
-  //   href: "/dashboard/cohortes-clientes",
-  //   label: "Cohortes Clientes",
-  //   icon: Radar,
-  // },
   {
-    href: "/dashboard/ventas-clientes",
-    label: "Ventas por Cliente",
-    icon: UsersRound,
-  },
-  {
-    href: "/dashboard/comparativo-anual",
-    label: "Comparativo Anual",
-    icon: TrendingUp,
-  },
-  // {
-  //   href: "/dashboard/backlog",
-  //   label: "Backlog",
-  //   icon: FolderKanban,
-  // },
-  // {
-  //   href: "/dashboard/proyeccion",
-  //   label: "Proyeccion",
-  //   icon: FolderKanban,
-  // },
-  {
-    href: "/dashboard/facturacion-linea",
-    label: "Facturacion por Linea",
-    icon: BriefcaseBusiness,
-  },
-  {
-    href: "/dashboard/ejecutivos",
-    label: "Ejecutivos",
-    icon: UserRound,
-  },
-  {
-    href: "/dashboard/contabilidad",
-    label: "Contabilidad",
-    icon: GitCompareArrows,
-  },
-  {
-    href: "/dashboard/presupuestos",
-    label: "Presupuestos",
-    icon: Target,
+    href: "/dashboard",
+    label: "Dashboards",
+    icon: LayoutDashboard,
   },
   {
     href: "/dashboard/imports",
     label: "Importaciones",
     icon: UploadCloud,
   },
-  {
-    href: "/dashboard/vendedor",
-    label: "Mi panel",
-    icon: User,
-  },
-  {
-    href: "/dashboard/vendedor/clientes",
-    label: "Mis clientes",
-    icon: UsersRound,
-  },
-  {
-    href: "/dashboard/vendedor/comparativo-anual",
-    label: "Mi historico",
-    icon: TrendingUp,
-  },
-  {
-    href: "/dashboard/vendedor/facturacion-linea",
-    label: "Mis lineas",
-    icon: BriefcaseBusiness,
-  },
-  {
-    href: "/dashboard/vendedor/backlog",
-    label: "Mi backlog",
-    icon: FolderKanban,
-  },
-  {
-    href: "/dashboard/vendedor/proyeccion",
-    label: "Mi proyeccion",
-    icon: GitCompareArrows,
-  },
 ];
 
 function isActivePath(pathname: string, href: string) {
   if (pathname === href) return true;
-  if (href === "/dashboard/vendedor") {
-    return pathname.startsWith("/dashboard/vendedor");
+  if (href === "/dashboard") {
+    return pathname.startsWith("/dashboard") && !pathname.startsWith("/dashboard/imports");
   }
   return false;
 }
@@ -169,8 +82,6 @@ function SidebarContent({
         </div>
 
         <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
-   
-
           {visibleNavigation.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);
 
@@ -193,6 +104,16 @@ function SidebarContent({
             );
           })}
         </nav>
+
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
+        >
+          <RefreshCw className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          Actualizar data
+        </button>
       </div>
 
       <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">

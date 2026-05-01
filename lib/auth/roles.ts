@@ -38,16 +38,12 @@ export function canAccessSellerDashboard(role: AppRole) {
 }
 
 export function getDefaultDashboardPath(role: AppRole) {
-  if (canAccessSellerDashboard(role)) {
-    return "/dashboard/vendedor";
-  }
-
-  if (canAccessExecutiveDashboards(role)) {
-    return "/dashboard/ventas-clientes";
-  }
-
-  if (canManageImports(role)) {
-    return "/dashboard/imports";
+  if (
+    canAccessSellerDashboard(role) ||
+    canAccessExecutiveDashboards(role) ||
+    canManageImports(role)
+  ) {
+    return "/dashboard";
   }
 
   return "/";
@@ -58,8 +54,14 @@ export function canAccessSidebarPath(role: AppRole, path: string) {
     return canManageImports(role);
   }
 
-  if (path.startsWith("/dashboard/vendedor")) {
+  const tab = path.includes("?") ? new URLSearchParams(path.split("?")[1]).get("tab") : null;
+
+  if (tab?.startsWith("vendedor-")) {
     return canAccessSellerDashboard(role);
+  }
+
+  if (path === "/dashboard") {
+    return canAccessExecutiveDashboards(role) || canAccessSellerDashboard(role);
   }
 
   return canAccessExecutiveDashboards(role);
