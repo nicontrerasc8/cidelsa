@@ -105,15 +105,7 @@ function SidebarContent({
           })}
         </nav>
 
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
-        >
-          <RefreshCw className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
-          Actualizar data
-        </button>
+    
       </div>
 
       <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">

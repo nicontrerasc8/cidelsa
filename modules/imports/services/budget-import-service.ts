@@ -55,21 +55,45 @@ const BUDGET_COLUMNS = [
   "grupo",
   "linea_original",
   "linea",
-  "proyeccion_cierre_anio_anterior",
-  "plan_anio_actual",
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "setiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-  "total_anio_actual",
+  "enero_ventas",
+  "enero_margen_bruto",
+  "febrero_ventas",
+  "febrero_margen_bruto",
+  "marzo_ventas",
+  "marzo_margen_bruto",
+  "abril_ventas",
+  "abril_margen_bruto",
+  "mayo_ventas",
+  "mayo_margen_bruto",
+  "junio_ventas",
+  "junio_margen_bruto",
+  "julio_ventas",
+  "julio_margen_bruto",
+  "agosto_ventas",
+  "agosto_margen_bruto",
+  "setiembre_ventas",
+  "setiembre_margen_bruto",
+  "octubre_ventas",
+  "octubre_margen_bruto",
+  "noviembre_ventas",
+  "noviembre_margen_bruto",
+  "diciembre_ventas",
+  "diciembre_margen_bruto",
+] as const;
+
+const BUDGET_MONTH_FIELDS = [
+  { ventas: "enero_ventas", margenBruto: "enero_margen_bruto" },
+  { ventas: "febrero_ventas", margenBruto: "febrero_margen_bruto" },
+  { ventas: "marzo_ventas", margenBruto: "marzo_margen_bruto" },
+  { ventas: "abril_ventas", margenBruto: "abril_margen_bruto" },
+  { ventas: "mayo_ventas", margenBruto: "mayo_margen_bruto" },
+  { ventas: "junio_ventas", margenBruto: "junio_margen_bruto" },
+  { ventas: "julio_ventas", margenBruto: "julio_margen_bruto" },
+  { ventas: "agosto_ventas", margenBruto: "agosto_margen_bruto" },
+  { ventas: "setiembre_ventas", margenBruto: "setiembre_margen_bruto" },
+  { ventas: "octubre_ventas", margenBruto: "octubre_margen_bruto" },
+  { ventas: "noviembre_ventas", margenBruto: "noviembre_margen_bruto" },
+  { ventas: "diciembre_ventas", margenBruto: "diciembre_margen_bruto" },
 ] as const;
 
 function normalizeImportRecord(row: RecentBudgetImportRow): ImportRecord {
@@ -102,8 +126,8 @@ function getBudgetGroupFromSection(section: BudgetSection, value: unknown) {
   const normalized = toNullableString(value);
   if (normalized) return normalized;
   if (section === "Arquitectura") return "Arquitectura";
-  if (section === "Comercial") return "Otros - Geoestructuras";
-  return "Otros - industrial";
+  if (section === "Comercial") return "Geoestructuras";
+  return "Industrial";
 }
 
 function buildImportSourceRef(fileName: string, userId: string) {
@@ -203,6 +227,13 @@ function normalizeBudgetPreviewSaveRows(input: BudgetPreviewSaveInput) {
         throw new Error("No se pudo identificar la fila Excel de una linea de presupuesto.");
       }
 
+      const monthlyPayload = Object.fromEntries(
+        BUDGET_MONTH_FIELDS.flatMap((field) => [
+          [field.ventas, row[field.ventas] ?? null],
+          [field.margenBruto, row[field.margenBruto] ?? null],
+        ]),
+      );
+
       rows.push({
         id: rowNumber,
         row_number: rowNumber,
@@ -214,22 +245,7 @@ function normalizeBudgetPreviewSaveRows(input: BudgetPreviewSaveInput) {
           grupo: getBudgetGroupFromSection(section, row.grupo),
           linea_original: row.linea_original ?? row.linea ?? null,
           linea: row.linea ?? row.linea_original ?? null,
-          proyeccion_cierre_anio_anterior:
-            row.proyeccion_cierre_anio_anterior ?? null,
-          plan_anio_actual: row.plan_anio_actual ?? null,
-          enero: row.enero ?? null,
-          febrero: row.febrero ?? null,
-          marzo: row.marzo ?? null,
-          abril: row.abril ?? null,
-          mayo: row.mayo ?? null,
-          junio: row.junio ?? null,
-          julio: row.julio ?? null,
-          agosto: row.agosto ?? null,
-          setiembre: row.setiembre ?? null,
-          octubre: row.octubre ?? null,
-          noviembre: row.noviembre ?? null,
-          diciembre: row.diciembre ?? null,
-          total_anio_actual: row.total_anio_actual ?? null,
+          ...monthlyPayload,
         },
       });
     }

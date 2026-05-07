@@ -174,7 +174,10 @@ function buildMetricRows(
     lineCount: value.lines.size,
     variance: value.actual - value.planned,
     achievement: value.planned ? (value.actual / value.planned) * 100 : null,
-    marginPct: value.actual ? (value.grossMargin / value.actual) * 100 : null,
+    marginPct:
+      value.actual || value.planned
+        ? (value.grossMargin / (value.actual || value.planned)) * 100
+        : null,
   }));
 }
 
@@ -343,11 +346,11 @@ function buildDashboardCopy(mode: DashboardMode, totals: Totals) {
     return {
       eyebrow: "Dashboard financiero",
       title: "Presupuestos",
-      subtitle: "Vista pura de presupuesto por año, periodo y categoría.",
-      chartTitle: "Presupuesto vs cierre previo",
-      chartSubtitle: "Plan vigente frente al cierre del año anterior.",
+      subtitle: "Vista mensual de presupuesto por año, periodo y categoría.",
+      chartTitle: "Presupuesto y MG por periodo",
+      chartSubtitle: "Ventas presupuestadas y margen bruto desde el nuevo Excel mensual.",
       distributionTitle: "Participación por categoría",
-      distributionSubtitle: "Distribución del presupuesto por grupo.",
+      distributionSubtitle: "Distribución de ventas presupuestadas por grupo.",
       emptyLabel: "No hay datos de presupuesto para los filtros seleccionados.",
       kpis: [
         {
@@ -357,15 +360,15 @@ function buildDashboardCopy(mode: DashboardMode, totals: Totals) {
           icon: <Target className="size-5" />,
         },
         {
-          title: "Cierre previo",
-          value: formatFullCurrency(totals.previous),
-          subtitle: "Base de comparación",
+          title: "MG presupuestado",
+          value: formatFullCurrency(totals.grossMargin),
+          subtitle: "Margen bruto visible",
           icon: <TrendingUp className="size-5" />,
         },
         {
-          title: "Brecha",
-          value: formatFullCurrency(totals.planned - totals.previous),
-          subtitle: "Plan menos cierre previo",
+          title: "MG %",
+          value: formatPercent(totals.planned ? (totals.grossMargin / totals.planned) * 100 : null),
+          subtitle: "Margen sobre presupuesto",
           icon: <Scale className="size-5" />,
         },
         {
@@ -494,7 +497,7 @@ export function FinancialFocusDashboard({
     summary.grupos.map((grupo) => ({ label: grupo, value: grupo })),
   );
   const tableColSpan =
-    mode === "comparison" ? 7 : mode === "budget" ? 4 : 5;
+    mode === "comparison" ? 7 : 5;
 
   return (
     <div className="min-h-screen bg-[#05080f] text-slate-300">
@@ -578,7 +581,8 @@ export function FinancialFocusDashboard({
                     {mode === "budget" ? (
                       <>
                         <Bar yAxisId="left" dataKey="planned" name="Presupuesto" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                        <Bar yAxisId="left" dataKey="previous" name="Cierre previo" fill="#94a3b8" radius={[8, 8, 0, 0]} />
+                        <Bar yAxisId="left" dataKey="grossMargin" name="MG presupuestado" fill="#10b981" radius={[8, 8, 0, 0]} />
+                        <Line yAxisId="right" type="monotone" dataKey="marginPct" name="MG %" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4 }} />
                       </>
                     ) : null}
                     {mode === "comparison" ? (
@@ -659,8 +663,9 @@ export function FinancialFocusDashboard({
                   <th className="px-6 py-4">Categoría</th>
                   {mode !== "budget" ? <th className="px-6 py-4 text-right">Real</th> : null}
                   {mode !== "accounting" ? <th className="px-6 py-4 text-right">Presupuesto</th> : null}
-                  <th className="px-6 py-4 text-right">Cierre previo</th>
-                  {mode !== "budget" ? <th className="px-6 py-4 text-right">Margen</th> : null}
+                  {mode !== "budget" ? <th className="px-6 py-4 text-right">Cierre previo</th> : null}
+                  <th className="px-6 py-4 text-right">Margen</th>
+                  {mode === "budget" ? <th className="px-6 py-4 text-right">MG %</th> : null}
                   {mode === "comparison" ? <th className="px-6 py-4 text-right">Cumplimiento</th> : null}
                   <th className="px-6 py-4 text-right">Líneas</th>
                 </tr>
@@ -680,12 +685,17 @@ export function FinancialFocusDashboard({
                           {formatFullCurrency(row.planned)}
                         </td>
                       ) : null}
-                      <td className="px-6 py-4 text-right text-slate-400">
-                        {formatFullCurrency(row.previous)}
-                      </td>
                       {mode !== "budget" ? (
+                        <td className="px-6 py-4 text-right text-slate-400">
+                          {formatFullCurrency(row.previous)}
+                        </td>
+                      ) : null}
+                      <td className="px-6 py-4 text-right text-slate-200">
+                        {formatFullCurrency(row.grossMargin)}
+                      </td>
+                      {mode === "budget" ? (
                         <td className="px-6 py-4 text-right text-slate-200">
-                          {formatFullCurrency(row.grossMargin)}
+                          {formatPercent(row.marginPct)}
                         </td>
                       ) : null}
                       {mode === "comparison" ? (

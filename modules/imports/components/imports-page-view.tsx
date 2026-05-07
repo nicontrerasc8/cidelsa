@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  BriefcaseBusiness,
+  Calculator,
   ChevronLeft,
   ChevronRight,
   Download,
   LoaderCircle,
   PencilLine,
+  Target,
   Trash2,
   UploadCloud,
 } from "lucide-react";
@@ -19,6 +22,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -128,35 +132,38 @@ const ACCOUNTING_BUSINESS_BY_SECTION = {
 } as const satisfies Record<AccountingSectionTitle, string>;
 
 const BUDGET_PREVIEW_COLUMNS = [
-  { key: "proyeccion_cierre_anio_anterior", label: "Proy. cierre año anterior" },
-  { key: "plan_anio_actual", label: "Plan año actual" },
-  { key: "enero", label: "Enero" },
-  { key: "febrero", label: "Febrero" },
-  { key: "marzo", label: "Marzo" },
-  { key: "abril", label: "Abril" },
-  { key: "mayo", label: "Mayo" },
-  { key: "junio", label: "Junio" },
-  { key: "julio", label: "Julio" },
-  { key: "agosto", label: "Agosto" },
-  { key: "setiembre", label: "Setiembre" },
-  { key: "octubre", label: "Octubre" },
-  { key: "noviembre", label: "Noviembre" },
-  { key: "diciembre", label: "Diciembre" },
-  { key: "total_anio_actual", label: "Total año actual" },
+  { key: "enero_ventas", label: "Enero ventas" },
+  { key: "enero_margen_bruto", label: "Enero MG" },
+  { key: "febrero_ventas", label: "Febrero ventas" },
+  { key: "febrero_margen_bruto", label: "Febrero MG" },
+  { key: "marzo_ventas", label: "Marzo ventas" },
+  { key: "marzo_margen_bruto", label: "Marzo MG" },
+  { key: "abril_ventas", label: "Abril ventas" },
+  { key: "abril_margen_bruto", label: "Abril MG" },
+  { key: "mayo_ventas", label: "Mayo ventas" },
+  { key: "mayo_margen_bruto", label: "Mayo MG" },
+  { key: "junio_ventas", label: "Junio ventas" },
+  { key: "junio_margen_bruto", label: "Junio MG" },
+  { key: "julio_ventas", label: "Julio ventas" },
+  { key: "julio_margen_bruto", label: "Julio MG" },
+  { key: "agosto_ventas", label: "Agosto ventas" },
+  { key: "agosto_margen_bruto", label: "Agosto MG" },
+  { key: "setiembre_ventas", label: "Setiembre ventas" },
+  { key: "setiembre_margen_bruto", label: "Setiembre MG" },
+  { key: "octubre_ventas", label: "Octubre ventas" },
+  { key: "octubre_margen_bruto", label: "Octubre MG" },
+  { key: "noviembre_ventas", label: "Noviembre ventas" },
+  { key: "noviembre_margen_bruto", label: "Noviembre MG" },
+  { key: "diciembre_ventas", label: "Diciembre ventas" },
+  { key: "diciembre_margen_bruto", label: "Diciembre MG" },
 ] as const;
 
-const BUDGET_GROUP_OPTIONS_BY_SECTION = {
-  Arquitectura: ["Arquitectura"],
-  Comercial: ACCOUNTING_GROUP_OPTIONS_BY_SECTION.Comercial,
-  Industrial: ACCOUNTING_GROUP_OPTIONS_BY_SECTION.Industrial,
-} as const;
-
-type BudgetSectionTitle = keyof typeof BUDGET_GROUP_OPTIONS_BY_SECTION;
+type BudgetSectionTitle = "Arquitectura" | "Comercial" | "Industrial";
 
 const DEFAULT_BUDGET_GROUP_BY_SECTION = {
   Arquitectura: "Arquitectura",
-  Comercial: DEFAULT_ACCOUNTING_GROUP_BY_SECTION.Comercial,
-  Industrial: DEFAULT_ACCOUNTING_GROUP_BY_SECTION.Industrial,
+  Comercial: "Geoestructuras",
+  Industrial: "Industrial",
 } as const satisfies Record<BudgetSectionTitle, string>;
 
 const BUDGET_BUSINESS_BY_SECTION = {
@@ -178,13 +185,6 @@ function getDefaultAccountingGroup(section: AccountingSectionTitle) {
 
 function getAccountingBusiness(section: AccountingSectionTitle) {
   return ACCOUNTING_BUSINESS_BY_SECTION[section];
-}
-
-function buildBudgetRowSelectionKey(
-  section: BudgetSectionTitle,
-  row: Record<string, unknown>,
-) {
-  return `${section}:${String(row.fila_excel ?? row.linea_original ?? row.linea ?? "")}`;
 }
 
 function getDefaultBudgetGroup(section: BudgetSectionTitle) {
@@ -270,6 +270,12 @@ function normalizePreviewColumnKey(header: string) {
 function formatPreviewCell(value: unknown, columnKey?: string) {
   if (value === null || value === undefined || value === "") return "";
   if (value instanceof Date) return value.toISOString();
+  const isGrossMarginColumn = columnKey?.endsWith("_margen_bruto");
+  const formatPercentage = (amount: number) => {
+    const percentage = Math.abs(amount) <= 1 ? amount * 100 : amount;
+    return `${percentage.toFixed(2)}%`;
+  };
+
   if (
     columnKey === "mes" &&
     typeof value === "number" &&
@@ -281,6 +287,7 @@ function formatPreviewCell(value: unknown, columnKey?: string) {
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return "";
+    if (isGrossMarginColumn) return formatPercentage(value);
     return Number.isInteger(value) ? String(value) : value.toFixed(2);
   }
   if (typeof value === "string") {
@@ -289,7 +296,8 @@ function formatPreviewCell(value: unknown, columnKey?: string) {
 
     if (/^-?\d+[,.]\d+$/.test(trimmed)) {
       const parsed = Number(normalizedDecimal);
-      return Number.isFinite(parsed) ? parsed.toFixed(2) : trimmed;
+      if (!Number.isFinite(parsed)) return trimmed;
+      return isGrossMarginColumn ? formatPercentage(parsed) : parsed.toFixed(2);
     }
 
     return value;
@@ -396,27 +404,27 @@ function AccountingMonthlyPreviewTable({
   const groupOptions = ACCOUNTING_GROUP_OPTIONS_BY_SECTION[title];
 
   return (
-    <div className="space-y-3 rounded-3xl border border-border/70 bg-background/80 p-3 shadow-sm">
+    <div className="space-y-3 rounded-3xl border border-slate-700/80 bg-slate-950/80 p-3 text-white shadow-sm">
       <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h4 className="font-medium">{title}</h4>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <h4 className="font-medium text-white">{title}</h4>
+          <p className="mt-1 text-xs text-slate-400">
             {rows.length} filas detectadas debajo de {title}.
           </p>
         </div>
       </div>
       {rows.length ? (
         <TopScrollSync minWidthClassName="min-w-max">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60">
-              <tr className="border-b">
-                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
+          <table className="w-full text-sm text-white">
+            <thead className="bg-slate-900">
+              <tr className="border-b border-slate-700">
+                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap">
                   Grupo
                 </th>
                 {ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.map((column) => (
                   <th
                     key={column.key}
-                    className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap"
+                    className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap"
                   >
                     {column.label}
                   </th>
@@ -427,12 +435,12 @@ function AccountingMonthlyPreviewTable({
               {rows.map((row, rowIndex) => (
                 <tr
                   key={`${title}-${rowIndex}`}
-                  className="border-b align-top last:border-b-0 odd:bg-background even:bg-muted/10"
+                  className="border-b border-slate-700 align-top last:border-b-0 odd:bg-slate-950 even:bg-slate-900"
                 >
-                  <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
+                  <td className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap">
                     <select
                       data-loading-overlay-ignore="true"
-                      className="h-10 min-w-52 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-10 min-w-52 rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-white outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
                       value={
                         groupSelections[
                           buildAccountingGroupSelectionKey(title, row)
@@ -453,11 +461,11 @@ function AccountingMonthlyPreviewTable({
                   {ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.map((column) => (
                     <td
                       key={`${title}-${rowIndex}-${column.key}`}
-                      className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap"
+                      className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap"
                     >
                       <div className="whitespace-pre-wrap">
                         {formatPreviewCell(row[column.key], column.key) || (
-                          <span className="text-muted-foreground/60">-</span>
+                          <span className="text-slate-500">-</span>
                         )}
                       </div>
                     </td>
@@ -468,7 +476,7 @@ function AccountingMonthlyPreviewTable({
           </table>
         </TopScrollSync>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-slate-700 p-6 text-sm text-slate-400">
           No se detectaron filas para esta sección.
         </div>
       )}
@@ -479,56 +487,32 @@ function AccountingMonthlyPreviewTable({
 function BudgetSectionPreviewTable({
   title,
   rows,
-  groupSelections,
-  lineOverrides,
-  onGroupChange,
-  onLineChange,
 }: {
   title: BudgetSectionTitle;
   rows: Record<string, unknown>[];
-  groupSelections: Record<string, string>;
-  lineOverrides: Record<string, string>;
-  onGroupChange: (
-    section: BudgetSectionTitle,
-    row: Record<string, unknown>,
-    group: string,
-  ) => void;
-  onLineChange: (
-    section: BudgetSectionTitle,
-    row: Record<string, unknown>,
-    line: string,
-  ) => void;
 }) {
-  const groupOptions = BUDGET_GROUP_OPTIONS_BY_SECTION[title];
-
   return (
-    <div className="space-y-3 rounded-3xl border border-border/70 bg-background/80 p-3 shadow-sm">
+    <div className="space-y-3 rounded-3xl border border-slate-700/80 bg-slate-950/80 p-3 text-white shadow-sm">
       <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h4 className="font-medium">{title}</h4>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <h4 className="font-medium text-white">{title}</h4>
+          <p className="mt-1 text-xs text-slate-400">
             {rows.length} filas detectadas para guardar en presupuesto.
           </p>
         </div>
       </div>
       {rows.length ? (
         <TopScrollSync minWidthClassName="min-w-max">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60">
-              <tr className="border-b">
-                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
-                  Grupo
-                </th>
-                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
-                  Línea original
-                </th>
-                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">
-                  Línea a mostrar
+          <table className="w-full text-sm text-white">
+            <thead className="bg-slate-900">
+              <tr className="border-b border-slate-700">
+                <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap">
+                  Línea
                 </th>
                 {BUDGET_PREVIEW_COLUMNS.map((column) => (
                   <th
                     key={column.key}
-                    className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap"
+                    className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap"
                   >
                     {column.label}
                   </th>
@@ -537,54 +521,23 @@ function BudgetSectionPreviewTable({
             </thead>
             <tbody>
               {rows.map((row, rowIndex) => {
-                const rowKey = buildBudgetRowSelectionKey(title, row);
                 const originalLine = String(row.linea_original ?? row.linea ?? "");
 
                 return (
                   <tr
                     key={`${title}-${rowIndex}`}
-                    className="border-b align-top last:border-b-0 odd:bg-background even:bg-muted/10"
+                    className="border-b border-slate-700 align-top last:border-b-0 odd:bg-slate-950 even:bg-slate-900"
                   >
-                    <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
-                      <select
-                        data-loading-overlay-ignore="true"
-                        className="h-10 min-w-52 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-                        value={
-                          groupSelections[rowKey] ?? getDefaultBudgetGroup(title)
-                        }
-                        onChange={(event) =>
-                          onGroupChange(title, row, event.target.value)
-                        }
-                      >
-                        {groupOptions.map((group) => (
-                          <option key={group} value={group}>
-                            {group}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
-                      {originalLine || (
-                        <span className="text-muted-foreground/60">-</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap">
-                      <input
-                        data-loading-overlay-ignore="true"
-                        className="h-10 min-w-64 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-                        value={lineOverrides[rowKey] ?? originalLine}
-                        onChange={(event) =>
-                          onLineChange(title, row, event.target.value)
-                        }
-                      />
+                    <td className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap">
+                      {originalLine || <span className="text-slate-500">-</span>}
                     </td>
                     {BUDGET_PREVIEW_COLUMNS.map((column) => (
                       <td
                         key={`${title}-${rowIndex}-${column.key}`}
-                        className="px-3 py-3 text-xs leading-5 text-foreground align-top whitespace-nowrap"
+                        className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap"
                       >
                         {formatPreviewCell(row[column.key], column.key) || (
-                          <span className="text-muted-foreground/60">-</span>
+                          <span className="text-slate-500">-</span>
                         )}
                       </td>
                     ))}
@@ -595,7 +548,7 @@ function BudgetSectionPreviewTable({
           </table>
         </TopScrollSync>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-slate-700 p-6 text-sm text-slate-400">
           No se detectaron filas para esta sección.
         </div>
       )}
@@ -649,12 +602,6 @@ function ImportUploadCard({
   const [isSavingAccounting, startSavingAccounting] = useTransition();
   const [isSavingBudget, startSavingBudget] = useTransition();
   const [accountingGroupSelections, setAccountingGroupSelections] = useState<
-    Record<string, string>
-  >({});
-  const [budgetGroupSelections, setBudgetGroupSelections] = useState<
-    Record<string, string>
-  >({});
-  const [budgetLineOverrides, setBudgetLineOverrides] = useState<
     Record<string, string>
   >({});
 
@@ -841,8 +788,6 @@ function ImportUploadCard({
 
         setPreview(payload);
         setAccountingGroupSelections({});
-        setBudgetGroupSelections({});
-        setBudgetLineOverrides({});
         setPreviewPage(1);
         router.refresh();
         toast.success(successMessage);
@@ -878,42 +823,19 @@ function ImportUploadCard({
     }));
   }
 
-  function handleBudgetGroupChange(
-    section: BudgetSectionTitle,
-    row: Record<string, unknown>,
-    group: string,
-  ) {
-    setBudgetGroupSelections((current) => ({
-      ...current,
-      [buildBudgetRowSelectionKey(section, row)]: group,
-    }));
-  }
-
-  function handleBudgetLineChange(
-    section: BudgetSectionTitle,
-    row: Record<string, unknown>,
-    line: string,
-  ) {
-    setBudgetLineOverrides((current) => ({
-      ...current,
-      [buildBudgetRowSelectionKey(section, row)]: line,
-    }));
-  }
-
   function buildRowsWithBudgetCategories(
     section: BudgetSectionTitle,
     rows: Record<string, unknown>[],
   ) {
     return rows.map((row) => {
-      const rowKey = buildBudgetRowSelectionKey(section, row);
       const originalLine = row.linea_original ?? row.linea ?? null;
 
       return {
         ...row,
         negocio: getBudgetBusiness(section),
-        grupo: budgetGroupSelections[rowKey] ?? getDefaultBudgetGroup(section),
+        grupo: getDefaultBudgetGroup(section),
         linea_original: originalLine,
-        linea: budgetLineOverrides[rowKey] ?? originalLine,
+        linea: originalLine,
       };
     });
   }
@@ -1066,9 +988,9 @@ function ImportUploadCard({
       <CardContent className="space-y-4">
         {showImportYear ? (
           <div className="space-y-2">
-            <Label>Año de carga</Label>
+            <Label className="text-slate-200">Año de carga</Label>
             <Input
-              className="border-slate-700 bg-slate-900 text-white placeholder:text-slate-500"
+              className="!border-slate-700 !bg-slate-900 !text-white placeholder:!text-slate-500"
               type="number"
               min={2020}
               max={2100}
@@ -1257,7 +1179,7 @@ function ImportUploadCard({
                 {preview?.monthlyRowsBySection
                   ? "Se muestran las líneas de Comercial e Industrial con ventas y margen bruto por mes."
                   : preview?.rowsBySection
-                    ? "Se muestran las líneas de presupuesto por sección, con la línea original y la línea a mostrar."
+                    ? "Se muestran las líneas de presupuesto por sección, con ventas y MG por mes."
                   : "Se muestran las filas tal como llegan del Excel. Los valores nulos se ven en blanco."}
               </p>
             </div>
@@ -1332,30 +1254,18 @@ function ImportUploadCard({
               <BudgetSectionPreviewTable
                 title="Arquitectura"
                 rows={architectureBudgetRows}
-                groupSelections={budgetGroupSelections}
-                lineOverrides={budgetLineOverrides}
-                onGroupChange={handleBudgetGroupChange}
-                onLineChange={handleBudgetLineChange}
               />
               <BudgetSectionPreviewTable
                 title="Comercial"
                 rows={commercialBudgetRows}
-                groupSelections={budgetGroupSelections}
-                lineOverrides={budgetLineOverrides}
-                onGroupChange={handleBudgetGroupChange}
-                onLineChange={handleBudgetLineChange}
               />
               <BudgetSectionPreviewTable
                 title="Industrial"
                 rows={industrialBudgetRows}
-                groupSelections={budgetGroupSelections}
-                lineOverrides={budgetLineOverrides}
-                onGroupChange={handleBudgetGroupChange}
-                onLineChange={handleBudgetLineChange}
               />
               <div className="flex flex-col gap-3 rounded-3xl border border-slate-700/80 bg-slate-950/70 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-slate-300">
-                  Se guardará la línea original y la línea a mostrar por cada fila.
+                  Se guardará la línea del Excel con ventas y MG por mes.
                 </p>
                 <Button
                   type="button"
@@ -1606,6 +1516,8 @@ export function ImportsPageView({
   accountingImports: ImportRecord[];
   budgetImports: ImportRecord[];
 }) {
+  const [activeImportTab, setActiveImportTab] = useState("ax");
+
   return (
     <div className="space-y-8">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1622,62 +1534,93 @@ export function ImportsPageView({
         </div>
       </section>
 
-      <div className="grid gap-6 2xl:grid-cols-3">
-        <ImportUploadCard
-          title="Subir Excel de AX"
-          eyebrow="Cargas AX"
-          description="Carga comercial principal. El archivo se procesa por posición, se conserva tal como llega y queda disponible para edición y dashboards comerciales."
-          templateHref="/api/imports/template"
-          uploadEndpoint="/api/imports"
-          templateLabel="Descargar plantilla AX"
-          successMessage="Importación AX procesada correctamente."
-          consoleLabel="[imports] Excel AX cargado"
-          accentClassName="bg-[linear-gradient(90deg,#0b1f33_0%,#1f5c8c_100%)]"
-          showImportYear={false}
-        />
-        <ImportUploadCard
-          title="Subir Excel de contabilidad"
-          eyebrow="Cargas contables"
-          description="Carga contable temporal para revisar el archivo completo: lee todas las filas y marca cuando la columna A coincide con 1. TENSOESTRUCTURA, Geosinteticos o Industrial."
-          uploadEndpoint="/api/accounting-imports"
-          successMessage="Excel contable leído correctamente. Revisa la consola para ver las filas."
-          consoleLabel="[accounting-imports] Excel cargado"
-          accentClassName="bg-[linear-gradient(90deg,#17456d_0%,#2d7f73_100%)]"
-        />
-        <ImportUploadCard
-          title="Subir Excel de presupuestos"
-          eyebrow="Cargas de presupuesto"
-          description="Carga el presupuesto por secciones: Arquitectura hasta TOTAL ARQUITECTURA, Geosinteticos hasta TOTAL GEOSINTETICOS e Industrial hasta TOTAL INDUSTRIAL."
-          uploadEndpoint="/api/budget-imports"
-          successMessage="Excel de presupuestos procesado correctamente."
-          consoleLabel="[budget-imports] Excel cargado"
-          accentClassName="bg-[linear-gradient(90deg,#23504f_0%,#5f7f3b_100%)]"
-        />
-      </div>
+      <Tabs value={activeImportTab} onValueChange={setActiveImportTab} className="space-y-6">
+        <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-3 shadow-xl shadow-black/20">
+          <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2 bg-transparent p-0">
+            <TabsTrigger
+              value="ax"
+              className="min-h-11 rounded-2xl px-4 py-2 text-sm font-semibold text-slate-300 transition data-[state=active]:bg-white data-[state=active]:text-slate-950"
+            >
+              <BriefcaseBusiness className="mr-2 size-4" />
+              Cargas AX
+            </TabsTrigger>
+            <TabsTrigger
+              value="accounting"
+              className="min-h-11 rounded-2xl px-4 py-2 text-sm font-semibold text-slate-300 transition data-[state=active]:bg-white data-[state=active]:text-slate-950"
+            >
+              <Calculator className="mr-2 size-4" />
+              Contabilidad
+            </TabsTrigger>
+            <TabsTrigger
+              value="budget"
+              className="min-h-11 rounded-2xl px-4 py-2 text-sm font-semibold text-slate-300 transition data-[state=active]:bg-white data-[state=active]:text-slate-950"
+            >
+              <Target className="mr-2 size-4" />
+              Presupuestos
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <div className="grid gap-6">
-        <ImportHistoryCard
-          title="Historial reciente AX"
-          imports={imports}
-          deleteEndpointBase="/api/imports"
-          editBasePath="/dashboard/imports"
-          emptyLabel="No hay importaciones AX registradas todavía."
-          showYearColumn={false}
-        />
-        <ImportHistoryCard
-          title="Historial reciente contabilidad"
-          imports={accountingImports}
-          deleteEndpointBase="/api/accounting-imports"
-          editBasePath="/dashboard/imports/contabilidad"
-          emptyLabel="No hay importaciones contables registradas todavía."
-        />
-        <ImportHistoryCard
-          title="Historial reciente presupuestos"
-          imports={budgetImports}
-          deleteEndpointBase="/api/budget-imports"
-          emptyLabel="No hay importaciones de presupuestos registradas todavía."
-        />
-      </div>
+        <TabsContent value="ax" className="m-0 space-y-6">
+          <ImportUploadCard
+            title="Subir Excel de AX"
+            eyebrow="Cargas AX"
+            description="Carga comercial principal. El archivo se procesa por posición, se conserva tal como llega y queda disponible para edición y dashboards comerciales."
+            templateHref="/api/imports/template"
+            uploadEndpoint="/api/imports"
+      
+            successMessage="Importación AX procesada correctamente."
+            consoleLabel="[imports] Excel AX cargado"
+            accentClassName="bg-[linear-gradient(90deg,#0b1f33_0%,#1f5c8c_100%)]"
+            showImportYear={false}
+          />
+          <ImportHistoryCard
+            title="Historial reciente AX"
+            imports={imports}
+            deleteEndpointBase="/api/imports"
+            editBasePath="/dashboard/imports"
+            emptyLabel="No hay importaciones AX registradas todavía."
+            showYearColumn={false}
+          />
+        </TabsContent>
+
+        <TabsContent value="accounting" className="m-0 space-y-6">
+          <ImportUploadCard
+            title="Subir Excel de contabilidad"
+            eyebrow="Cargas contables"
+            description="Carga contable temporal para revisar el archivo completo: lee todas las filas y marca cuando la columna A coincide con 1. TENSOESTRUCTURA, Geosinteticos o Industrial."
+            uploadEndpoint="/api/accounting-imports"
+            successMessage="Excel contable leído correctamente. Revisa la consola para ver las filas."
+            consoleLabel="[accounting-imports] Excel cargado"
+            accentClassName="bg-[linear-gradient(90deg,#17456d_0%,#2d7f73_100%)]"
+          />
+          <ImportHistoryCard
+            title="Historial reciente contabilidad"
+            imports={accountingImports}
+            deleteEndpointBase="/api/accounting-imports"
+            editBasePath="/dashboard/imports/contabilidad"
+            emptyLabel="No hay importaciones contables registradas todavía."
+          />
+        </TabsContent>
+
+        <TabsContent value="budget" className="m-0 space-y-6">
+          <ImportUploadCard
+            title="Subir Excel de presupuestos"
+            eyebrow="Cargas de presupuesto"
+            description="Carga el presupuesto por secciones desde la columna A. Cada línea usa pares mensuales: ventas y MG de enero a diciembre."
+            uploadEndpoint="/api/budget-imports"
+            successMessage="Excel de presupuestos procesado correctamente."
+            consoleLabel="[budget-imports] Excel cargado"
+            accentClassName="bg-[linear-gradient(90deg,#23504f_0%,#5f7f3b_100%)]"
+          />
+          <ImportHistoryCard
+            title="Historial reciente presupuestos"
+            imports={budgetImports}
+            deleteEndpointBase="/api/budget-imports"
+            emptyLabel="No hay importaciones de presupuestos registradas todavía."
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

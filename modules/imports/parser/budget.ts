@@ -16,22 +16,22 @@ const BUDGET_TOTAL_MARKERS = {
   "TOTAL INDUSTRIAL": "Industrial",
 } as const;
 
-const MONTH_VALUE_COLUMNS = [
-  { key: "enero", column: "columna_e" },
-  { key: "febrero", column: "columna_f" },
-  { key: "marzo", column: "columna_g" },
-  { key: "abril", column: "columna_h" },
-  { key: "mayo", column: "columna_i" },
-  { key: "junio", column: "columna_j" },
-  { key: "julio", column: "columna_k" },
-  { key: "agosto", column: "columna_l" },
-  { key: "setiembre", column: "columna_m" },
-  { key: "octubre", column: "columna_n" },
-  { key: "noviembre", column: "columna_o" },
-  { key: "diciembre", column: "columna_p" },
+const MONTH_COLUMN_PAIRS = [
+  { mes: "enero", ventas: "columna_b", margenBruto: "columna_c" },
+  { mes: "febrero", ventas: "columna_d", margenBruto: "columna_e" },
+  { mes: "marzo", ventas: "columna_f", margenBruto: "columna_g" },
+  { mes: "abril", ventas: "columna_h", margenBruto: "columna_i" },
+  { mes: "mayo", ventas: "columna_j", margenBruto: "columna_k" },
+  { mes: "junio", ventas: "columna_l", margenBruto: "columna_m" },
+  { mes: "julio", ventas: "columna_n", margenBruto: "columna_o" },
+  { mes: "agosto", ventas: "columna_p", margenBruto: "columna_q" },
+  { mes: "setiembre", ventas: "columna_r", margenBruto: "columna_s" },
+  { mes: "octubre", ventas: "columna_t", margenBruto: "columna_u" },
+  { mes: "noviembre", ventas: "columna_v", margenBruto: "columna_w" },
+  { mes: "diciembre", ventas: "columna_x", margenBruto: "columna_y" },
 ] as const;
 
-const LAST_BUDGET_COLUMN_NUMBER = 17;
+const LAST_BUDGET_COLUMN_NUMBER = 25;
 
 export type BudgetSection = "Arquitectura" | "Comercial" | "Industrial";
 
@@ -129,16 +129,11 @@ function buildBudgetPayload(
     seccion: section,
     linea_original: rawPayload.columna_a,
     linea: rawPayload.columna_a,
-    proyeccion_cierre_anio_anterior: rawPayload.columna_b,
-    plan_anio_actual: rawPayload.columna_c,
   };
 
-  if (section !== "Arquitectura") {
-    for (const month of MONTH_VALUE_COLUMNS) {
-      payload[month.key] = rawPayload[month.column] ?? null;
-    }
-
-    payload.total_anio_actual = rawPayload.columna_q ?? null;
+  for (const month of MONTH_COLUMN_PAIRS) {
+    payload[`${month.mes}_ventas`] = rawPayload[month.ventas] ?? null;
+    payload[`${month.mes}_margen_bruto`] = rawPayload[month.margenBruto] ?? null;
   }
 
   return payload;
@@ -186,6 +181,7 @@ export async function parseBudgetWorkbook(file: File) {
 
     const lineName = typeof columnA === "string" ? columnA.trim() : columnA;
     if (!lineName) return;
+    if (normalizeBudgetMarker(lineName) === "NOMBRE") return;
 
     const parsedRow: ParsedBudgetRow = {
       rowNumber,
@@ -203,21 +199,30 @@ export async function parseBudgetWorkbook(file: File) {
     "fila_excel",
     "seccion",
     "linea",
-    "proyeccion_cierre_anio_anterior",
-    "plan_anio_actual",
-    "enero",
-    "febrero",
-    "marzo",
-    "abril",
-    "mayo",
-    "junio",
-    "julio",
-    "agosto",
-    "setiembre",
-    "octubre",
-    "noviembre",
-    "diciembre",
-    "total_anio_actual",
+    "enero_ventas",
+    "enero_margen_bruto",
+    "febrero_ventas",
+    "febrero_margen_bruto",
+    "marzo_ventas",
+    "marzo_margen_bruto",
+    "abril_ventas",
+    "abril_margen_bruto",
+    "mayo_ventas",
+    "mayo_margen_bruto",
+    "junio_ventas",
+    "junio_margen_bruto",
+    "julio_ventas",
+    "julio_margen_bruto",
+    "agosto_ventas",
+    "agosto_margen_bruto",
+    "setiembre_ventas",
+    "setiembre_margen_bruto",
+    "octubre_ventas",
+    "octubre_margen_bruto",
+    "noviembre_ventas",
+    "noviembre_margen_bruto",
+    "diciembre_ventas",
+    "diciembre_margen_bruto",
   ];
 
   console.groupCollapsed("[budget-imports][parser] Excel de presupuesto recibido");

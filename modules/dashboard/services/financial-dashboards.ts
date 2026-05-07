@@ -301,15 +301,21 @@ const loadFinancialSourceRows = unstable_cache(
         if (!linea) continue;
 
         const hasMonthlyBudgetFields = MONTHLY_ACCOUNTING_FIELDS.some(
-          (field) => field.periodo.toLowerCase() in payload,
+          (field) => field.ventas in payload || field.periodo.toLowerCase() in payload,
         );
 
         if (hasMonthlyBudgetFields) {
           for (const field of MONTHLY_ACCOUNTING_FIELDS) {
             const periodKey = field.periodo.toLowerCase();
-            const plannedAmount = normalizeBudgetAmount(payload[periodKey]);
+            const plannedAmount = normalizeBudgetAmount(
+              field.ventas in payload ? payload[field.ventas] : payload[periodKey],
+            );
+            const grossMargin = normalizeMonthlyAccountingGrossMargin(
+              payload[field.margenBruto],
+              plannedAmount,
+            );
 
-            if (plannedAmount === null) continue;
+            if (plannedAmount === null && grossMargin === null) continue;
 
             rows.push({
               source: "budget",
@@ -319,9 +325,9 @@ const loadFinancialSourceRows = unstable_cache(
               periodo: field.periodo,
               linea,
               previousAmount: 0,
-              plannedAmount,
+              plannedAmount: plannedAmount ?? 0,
               actualAmount: 0,
-              grossMargin: null,
+              grossMargin,
             });
           }
 
