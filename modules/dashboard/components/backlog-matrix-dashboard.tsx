@@ -1,19 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
-  Cell,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -23,9 +16,7 @@ import {
   Activity,
   CalendarDays,
   Layers3,
-  ListOrdered,
   PackageOpen,
-  PieChart as PieChartIcon,
   TrendingDown,
   TrendingUp,
   UsersRound,
@@ -49,8 +40,6 @@ const CHART_AXIS_STYLE = { stroke: "rgba(148,163,184,0.18)" } as const;
 
 type DashboardRow = BacklogMatrixSummary["rows"][number];
 type FilterOption = { label: string; value: string };
-type RankingScope = "lineas" | "clientes" | "ejecutivos";
-type ChartEntry = { name: string; value: number };
 type TooltipPayload = { name?: string | number; value?: unknown; color?: string; fill?: string; dataKey?: string | number };
 
 function formatPen(value: number) {
@@ -171,10 +160,6 @@ function KpiTile({ title, value, subtitle, icon: Icon, trend, chartData, color }
   );
 }
 
-function TabButton({ active, onClick, children, icon: Icon }: { active: boolean; onClick: () => void; children: ReactNode; icon: LucideIcon }) {
-  return <button type="button" onClick={onClick} className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${active ? "border-sky-400/50 bg-sky-500 text-white shadow-[0_0_24px_rgba(14,165,233,0.25)]" : "border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-100"}`}><Icon size={18} />{children}</button>;
-}
-
 function ChartEmpty({ label }: { label: string }) {
   return <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/30 text-sm text-slate-500">{label}</div>;
 }
@@ -194,23 +179,13 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-function ChartScopeToggle({ href }: { href: string }) {
-  return <Link href={href} className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/14">Ver todo</Link>;
-}
-
-function RankingList({ items }: { items: ChartEntry[] }) {
-  return <div className="space-y-2">{items.map((item, index) => <div key={item.name} className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} /><span className="truncate text-sm font-medium text-slate-200">{item.name}</span><span className="text-sm font-bold text-white">{formatCompactPen(item.value)}</span></div>)}</div>;
-}
 export function BacklogMatrixDashboard({
   summary,
   title = "Backlog por linea y mes",
   eyebrow = "Dashboard backlog",
   description = "",
-  cardTitle = "Matriz de backlog",
   totalLabel = "Backlog total",
-  emptyLabel = "No hay backlog para los filtros seleccionados.",
   totalVisibleLabel = "Total backlog visible:",
-  showSituacionBreakdown = true,
   showEtapaFilter = true,
   defaultEtapaValue = ALL_VALUE,
 }: {
@@ -226,10 +201,6 @@ export function BacklogMatrixDashboard({
   showEtapaFilter?: boolean;
   defaultEtapaValue?: string;
 }) {
-  const pathname = usePathname();
-  const topScrollRef = useRef<HTMLDivElement | null>(null);
-  const bottomScrollRef = useRef<HTMLDivElement | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "matrix" | "breakdown">("overview");
   const [selectedYear, setSelectedYear] = useState<string>(String(summary.years[0] ?? YEAR_ALL_VALUE));
   const [selectedNegocio, setSelectedNegocio] = useState<string>(ALL_VALUE);
   const [selectedEtapa, setSelectedEtapa] = useState<string>(defaultEtapaValue);
@@ -241,14 +212,6 @@ export function BacklogMatrixDashboard({
   const hasEtapaFilter = showEtapaFilter && summary.etapas.length > 0;
   const visibleYear = selectedYear === YEAR_ALL_VALUE ? null : Number(selectedYear);
   const previousYear = visibleYear === null ? null : visibleYear - 1;
-
-  function syncHorizontalScroll(source: "top" | "bottom") {
-    const top = topScrollRef.current;
-    const bottom = bottomScrollRef.current;
-    if (!top || !bottom) return;
-    if (source === "top" && bottom.scrollLeft !== top.scrollLeft) bottom.scrollLeft = top.scrollLeft;
-    if (source === "bottom" && top.scrollLeft !== bottom.scrollLeft) top.scrollLeft = bottom.scrollLeft;
-  }
 
   const matchesCommonFilters = useCallback((row: DashboardRow, includeYear: boolean) => {
     if (includeYear && visibleYear !== null && row.importYear !== visibleYear) return false;
@@ -360,25 +323,11 @@ export function BacklogMatrixDashboard({
   }, [filteredRows, previousRows]);
 
   const activeNegocioLabel = selectedNegocio === ALL_VALUE ? "Todos los negocios" : negocioOptions.find((option) => option.value === selectedNegocio)?.label ?? selectedNegocio;
-  const tableMinWidth = 220 + matrix.months.length * 120 + 150;
 
   function resetDependentFilters() {
     setSelectedLinea(ALL_VALUE);
     setSelectedEjecutivo(ALL_VALUE);
     setSelectedMonth(MONTH_ALL_VALUE);
-  }
-
-  function buildDetailHref(scope: RankingScope) {
-    const params = new URLSearchParams();
-    params.set("scope", scope);
-    if (selectedYear !== YEAR_ALL_VALUE) params.set("anio", selectedYear);
-    if (selectedNegocio !== ALL_VALUE) params.set("negocio", selectedNegocio);
-    if (hasEtapaFilter && selectedEtapa !== ALL_VALUE) params.set("etapa", selectedEtapa);
-    if (selectedSituacion !== ALL_VALUE) params.set("situacion", selectedSituacion);
-    if (selectedEjecutivo !== ALL_VALUE) params.set("ejecutivo", selectedEjecutivo);
-    if (selectedLinea !== ALL_VALUE) params.set("linea", selectedLinea);
-    if (selectedMonth !== MONTH_ALL_VALUE) params.set("mes", selectedMonth);
-    return `${pathname}/detalle?${params.toString()}`;
   }
 
   return (
@@ -421,81 +370,38 @@ export function BacklogMatrixDashboard({
           <KpiTile title="Meses con actividad" value={`${analytics.activeMonthCount}/12`} subtitle={`${filteredRows.length} registros visibles`} icon={Zap} color="amber" />
         </section>
 
-        <nav className="inline-flex flex-wrap gap-2 rounded-2xl border border-white/5 bg-slate-900/50 p-1.5 backdrop-blur-md">
-          <TabButton active={activeTab === "overview"} onClick={() => setActiveTab("overview")} icon={TrendingUp}>Vista general & YoY</TabButton>
-          <TabButton active={activeTab === "matrix"} onClick={() => setActiveTab("matrix")} icon={ListOrdered}>Matriz mensual</TabButton>
-          <TabButton active={activeTab === "breakdown"} onClick={() => setActiveTab("breakdown")} icon={PieChartIcon}>Segmentos</TabButton>
-        </nav>
-        {activeTab === "overview" ? (
-          <section className="grid gap-6 lg:grid-cols-3">
-            <ShellCard className="lg:col-span-2">
-              <ShellCardHeader><ShellCardTitle>Comparacion anual</ShellCardTitle><p className="mt-1 text-xs text-slate-400">{visibleYear === null ? "Vista acumulada mensual" : `${visibleYear} vs ${previousYear}`}</p></ShellCardHeader>
-              <ShellCardContent className="h-[380px]">
-                {analytics.monthsComparison.some((month) => month.actual !== 0 || month.anterior !== 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={analytics.monthsComparison} margin={{ top: 10, right: 10, left: -16, bottom: 0 }}>
-                      <defs><linearGradient id="backlog-current" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.32} /><stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} /></linearGradient><linearGradient id="backlog-previous" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#94a3b8" stopOpacity={0.16} /><stop offset="95%" stopColor="#94a3b8" stopOpacity={0} /></linearGradient></defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                      <XAxis dataKey="month" tick={CHART_TICK_STYLE} axisLine={CHART_AXIS_STYLE} tickLine={CHART_AXIS_STYLE} />
-                      <YAxis tickFormatter={(value) => formatCompactPen(Number(value))} tick={CHART_TICK_STYLE} axisLine={CHART_AXIS_STYLE} tickLine={CHART_AXIS_STYLE} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area type="monotone" name={previousYear === null ? "Anterior" : String(previousYear)} dataKey="anterior" stroke="#64748b" strokeDasharray="5 5" fill="url(#backlog-previous)" />
-                      <Area type="monotone" name={visibleYear === null ? "Actual" : String(visibleYear)} dataKey="actual" stroke="#0ea5e9" strokeWidth={3} fill="url(#backlog-current)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : <ChartEmpty label="No hay datos mensuales para graficar." />}
-              </ShellCardContent>
-            </ShellCard>
-
-            <div className="space-y-6">
-              <ShellCard>
-                <ShellCardHeader className="flex items-center justify-between gap-3"><ShellCardTitle>Top lineas</ShellCardTitle><ChartScopeToggle href={buildDetailHref("lineas")} /></ShellCardHeader>
-                <ShellCardContent className="h-[210px]">
-                  {analytics.lineasTop.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={analytics.lineasTop} layout="vertical" margin={{ top: 0, right: 0, left: 10, bottom: 0 }}><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={120} tick={CHART_TICK_STYLE} axisLine={false} tickLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={16}>{analytics.lineasTop.map((entry, index) => <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Bar></BarChart></ResponsiveContainer> : <ChartEmpty label="No hay lineas para graficar." />}
-                </ShellCardContent>
-              </ShellCard>
-              <ShellCard>
-                <ShellCardHeader className="flex items-center justify-between gap-3"><ShellCardTitle>Top ejecutivos</ShellCardTitle><ChartScopeToggle href={buildDetailHref("ejecutivos")} /></ShellCardHeader>
-                <ShellCardContent className="h-[210px]">
-                  {analytics.ejecutivosTop.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={analytics.ejecutivosTop} layout="vertical" margin={{ top: 0, right: 0, left: 10, bottom: 0 }}><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={120} tick={CHART_TICK_STYLE} axisLine={false} tickLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="value" fill="#10b981" radius={[0, 5, 5, 0]} barSize={16} /></BarChart></ResponsiveContainer> : <ChartEmpty label="No hay ejecutivos para graficar." />}
-                </ShellCardContent>
-              </ShellCard>
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "matrix" ? (
-          <ShellCard className="overflow-hidden">
-            <ShellCardHeader className="border-b border-white/5 bg-slate-900/70"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><ShellCardTitle className="text-xl">{cardTitle}</ShellCardTitle><p className="mt-1 text-sm text-slate-400">Vista mensual consolidada por linea para la seleccion actual.</p></div><div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-2 font-bold text-sky-300">{totalVisibleLabel} {formatPen(matrix.grandTotal)}</div></div></ShellCardHeader>
-            <div ref={topScrollRef} className="overflow-x-auto border-b border-white/5 bg-slate-950/50" onScroll={() => syncHorizontalScroll("top")}><div style={{ width: tableMinWidth }} className="h-4" /></div>
-            <div ref={bottomScrollRef} className="max-h-[70dvh] overflow-auto" onScroll={() => syncHorizontalScroll("bottom")}>
-              <table style={{ minWidth: tableMinWidth }} className="w-full text-left text-sm">
-                <thead className="bg-slate-800/70 text-xs uppercase text-slate-400"><tr><th className="sticky left-0 top-0 z-20 min-w-[220px] border-r border-white/5 bg-slate-900 px-6 py-4 font-semibold">Linea de negocio</th>{matrix.months.map((month) => <th key={month} className="sticky top-0 z-10 min-w-[120px] bg-slate-800 px-4 py-4 text-right font-semibold">{month}</th>)}<th className="sticky right-0 top-0 z-20 min-w-[150px] bg-slate-800 px-6 py-4 text-right font-bold text-white">Total</th></tr></thead>
-                <tbody className="divide-y divide-white/5 bg-[#0c1624]">
-                  {matrix.lines.length ? matrix.lines.map((line, rowIndex) => <tr key={line.linea} className="transition hover:bg-white/[0.035]"><td className={`sticky left-0 z-10 border-r border-white/5 px-6 py-4 font-medium text-slate-200 ${rowIndex % 2 === 0 ? "bg-[#0c1624]" : "bg-[#101b2b]"}`}>{line.linea}</td>{line.months.map((value, index) => <td key={`${line.linea}-${index}`} className="px-4 py-4 text-right tabular-nums text-slate-400">{value !== 0 ? <span className={value > 0 ? "font-medium text-emerald-400" : "font-medium text-rose-400"}>{formatPen(value)}</span> : "-"}</td>)}<td className="sticky right-0 z-10 bg-[#0c1624]/95 px-6 py-4 text-right font-bold tabular-nums text-sky-300">{formatPen(line.total)}</td></tr>) : <tr><td colSpan={matrix.months.length + 2} className="px-6 py-16 text-center text-sm text-slate-500">{emptyLabel}</td></tr>}
-                </tbody>
-                <tfoot className="bg-slate-800 text-white"><tr><td className="sticky bottom-0 left-0 z-20 border-r border-white/5 bg-slate-800 px-6 py-5 font-bold">TOTAL GENERAL</td>{matrix.monthTotals.map((value, index) => <td key={`total-${index}`} className="sticky bottom-0 z-10 bg-slate-800 px-4 py-5 text-right font-bold tabular-nums text-sky-200">{value !== 0 ? formatPen(value) : "-"}</td>)}<td className="sticky bottom-0 right-0 z-20 bg-slate-800 px-6 py-5 text-right text-base font-extrabold tabular-nums text-emerald-400">{formatPen(matrix.grandTotal)}</td></tr></tfoot>
-              </table>
-            </div>
-          </ShellCard>
-        ) : null}
-
-        {activeTab === "breakdown" ? (
-          <section className="grid gap-6 lg:grid-cols-2">
-            <ShellCard>
-              <ShellCardHeader><ShellCardTitle>Distribucion por situacion</ShellCardTitle></ShellCardHeader>
-              <ShellCardContent className="flex min-h-[400px] flex-col items-center gap-6 md:flex-row">
-                {showSituacionBreakdown && analytics.situaciones.length ? <><div className="h-[300px] w-full md:w-1/2"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={analytics.situaciones} dataKey="value" nameKey="name" innerRadius={74} outerRadius={110} paddingAngle={4} stroke="none">{analytics.situaciones.map((entry, index) => <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart></ResponsiveContainer></div><div className="w-full md:w-1/2"><RankingList items={analytics.situaciones} /></div></> : <ChartEmpty label="No hay situaciones para graficar." />}
-              </ShellCardContent>
-            </ShellCard>
-            <ShellCard>
-              <ShellCardHeader className="flex items-center justify-between gap-3"><ShellCardTitle>Clientes con mayor monto</ShellCardTitle><ChartScopeToggle href={buildDetailHref("clientes")} /></ShellCardHeader>
-              <ShellCardContent className="h-[400px]">
-                {analytics.clientesTop.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={analytics.clientesTop} margin={{ top: 20, right: 20, left: -8, bottom: 20 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" /><XAxis dataKey="name" interval={0} angle={-18} textAnchor="end" height={78} tick={CHART_TICK_STYLE} axisLine={CHART_AXIS_STYLE} tickLine={CHART_AXIS_STYLE} /><YAxis tickFormatter={(value) => formatCompactPen(Number(value))} tick={CHART_TICK_STYLE} axisLine={CHART_AXIS_STYLE} tickLine={CHART_AXIS_STYLE} /><Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} /><Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={42}>{analytics.clientesTop.map((entry, index) => <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Bar></BarChart></ResponsiveContainer> : <ChartEmpty label="No hay clientes para graficar." />}
-              </ShellCardContent>
-            </ShellCard>
-          </section>
-        ) : null}
+        <ShellCard>
+          <ShellCardHeader>
+            <ShellCardTitle>Comparacion anual</ShellCardTitle>
+            <p className="mt-1 text-xs text-slate-400">
+              {visibleYear === null ? "Vista acumulada mensual" : `${visibleYear} vs ${previousYear}`}
+            </p>
+          </ShellCardHeader>
+          <ShellCardContent className="h-[480px]">
+            {analytics.monthsComparison.some((month) => month.actual !== 0 || month.anterior !== 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={analytics.monthsComparison} margin={{ top: 10, right: 10, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="backlog-current" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.32} />
+                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="backlog-previous" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.16} />
+                      <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                  <XAxis dataKey="month" tick={CHART_TICK_STYLE} axisLine={CHART_AXIS_STYLE} tickLine={CHART_AXIS_STYLE} />
+                  <YAxis tickFormatter={(value) => formatCompactPen(Number(value))} tick={CHART_TICK_STYLE} axisLine={CHART_AXIS_STYLE} tickLine={CHART_AXIS_STYLE} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" name={previousYear === null ? "Anterior" : String(previousYear)} dataKey="anterior" stroke="#64748b" strokeDasharray="5 5" fill="url(#backlog-previous)" />
+                  <Area type="monotone" name={visibleYear === null ? "Actual" : String(visibleYear)} dataKey="actual" stroke="#0ea5e9" strokeWidth={3} fill="url(#backlog-current)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : <ChartEmpty label="No hay datos mensuales para graficar." />}
+          </ShellCardContent>
+        </ShellCard>
       </div>
     </div>
   );

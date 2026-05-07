@@ -10,6 +10,7 @@ export type SalesByExecutiveRow = {
   monthIndex: number | null;
   negocio: string | null;
   linea: string | null;
+  cliente: string | null;
   ejecutivo: string;
   ventasMonto: number;
 };
@@ -44,6 +45,7 @@ async function loadSalesByExecutiveSummary(): Promise<SalesByExecutiveSummary> {
       monthIndex: row.monthIndex,
       negocio: row.negocio,
       linea: row.linea,
+      cliente: row.cliente,
       ejecutivo: row.ejecutivo,
       ventasMonto: row.ventasMonto,
     });

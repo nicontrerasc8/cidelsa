@@ -57,7 +57,7 @@ export async function getSellerDashboardSummary(): Promise<SellerDashboardSummar
     lineas: [...lineaSet].sort((a, b) => a.localeCompare(b)),
     totalVentas: rows.reduce((sum, row) => sum + row.ventasMonto, 0),
     totalFacturado: rows
-      .filter((row) => row.fechaFacturacion)
+      .filter((row) => row.fechaFacturacion || row.situacion === "facturado")
       .reduce((sum, row) => sum + row.ventasMonto, 0),
     registros: rows.length,
     clientesActivos: clientSet.size,

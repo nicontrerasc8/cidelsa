@@ -164,43 +164,43 @@ export function SellerDashboardTabsView({
         icon: BriefcaseBusiness,
         content: <BillingByLineDashboard summary={bundle.billingByLine} />,
       },
-      {
-        id: "vendedor-backlog",
-        label: "Mi backlog",
-        icon: FolderKanban,
-        content: (
-          <BacklogMatrixDashboard
-            summary={bundle.backlog}
-            eyebrow="Dashboard ejecutivo"
-            title="Mi backlog por linea y mes"
-            description="Backlog visible solo para las filas donde el campo Ejecutivo coincide con tu nombre."
-            cardTitle="Matriz de mi backlog"
-            totalLabel="Mi backlog total"
-            emptyLabel="No hay backlog visible para tu usuario."
-            totalVisibleLabel="Total backlog visible:"
-            showEtapaFilter={false}
-          />
-        ),
-      },
-      {
-        id: "vendedor-proyeccion",
-        label: "Mi proyeccion",
-        icon: GitCompareArrows,
-        content: (
-          <BacklogMatrixDashboard
-            summary={bundle.projection}
-            eyebrow="Dashboard ejecutivo"
-            title="Mi proyeccion por linea y mes"
-            description="Proyeccion visible solo para las filas donde el campo Ejecutivo coincide con tu nombre."
-            cardTitle="Matriz de mi proyeccion"
-            totalLabel="Mi proyeccion total"
-            emptyLabel="No hay proyeccion visible para tu usuario."
-            totalVisibleLabel="Total proyeccion visible:"
-            showSituacionBreakdown={false}
-            defaultEtapaValue="informacion"
-          />
-        ),
-      },
+      // {
+      //   id: "vendedor-backlog",
+      //   label: "Mi backlog",
+      //   icon: FolderKanban,
+      //   content: (
+      //     <BacklogMatrixDashboard
+      //       summary={bundle.backlog}
+      //       eyebrow="Dashboard ejecutivo"
+      //       title="Mi backlog por linea y mes"
+      //       description="Backlog visible solo para las filas donde el campo Ejecutivo coincide con tu nombre."
+      //       cardTitle="Matriz de mi backlog"
+      //       totalLabel="Mi backlog total"
+      //       emptyLabel="No hay backlog visible para tu usuario."
+      //       totalVisibleLabel="Total backlog visible:"
+      //       showEtapaFilter={false}
+      //     />
+      //   ),
+      // },
+      // {
+      //   id: "vendedor-proyeccion",
+      //   label: "Mi proyeccion",
+      //   icon: GitCompareArrows,
+      //   content: (
+      //     <BacklogMatrixDashboard
+      //       summary={bundle.projection}
+      //       eyebrow="Dashboard ejecutivo"
+      //       title="Mi proyeccion por linea y mes"
+      //       description="Proyeccion visible solo para las filas donde el campo Ejecutivo coincide con tu nombre."
+      //       cardTitle="Matriz de mi proyeccion"
+      //       totalLabel="Mi proyeccion total"
+      //       emptyLabel="No hay proyeccion visible para tu usuario."
+      //       totalVisibleLabel="Total proyeccion visible:"
+      //       showSituacionBreakdown={false}
+      //       defaultEtapaValue="informacion"
+      //     />
+      //   ),
+      // },
     ],
     [bundle],
   );
