@@ -5,6 +5,12 @@ export type AppRole =
   | "ejecutivo_ventas"
   | "directorio";
 
+export type Json = unknown;
+
+export type ImportStatus = "pending" | "processing" | "processed" | "failed";
+
+type DbRecord<T> = T & Record<string, unknown>;
+
 export interface ProfileRecord {
   id: string;
   full_name: string | null;
@@ -21,7 +27,7 @@ export interface ImportRecord {
   anio: number | null;
   uploaded_by: string;
   uploaded_at: string;
-  status: "pending" | "processing" | "processed" | "failed";
+  status: ImportStatus;
   total_rows: number;
   valid_rows: number;
   error_rows: number;
@@ -70,3 +76,67 @@ export interface ImportFactRow {
   margen_monto: number | null;
   porcentaje_num: number | null;
 }
+
+type ProfileTable = {
+  Row: DbRecord<ProfileRecord>;
+  Insert: DbRecord<{
+    id: string;
+    full_name?: string | null;
+    email: string;
+    role?: AppRole;
+    is_active?: boolean;
+    created_at?: string;
+  }>;
+  Update: DbRecord<Partial<ProfileTable["Insert"]>>;
+  Relationships: [];
+};
+
+type ImportTable = {
+  Row: DbRecord<ImportRecord & {
+    sheet_name: string | null;
+    data: Json;
+  }>;
+  Insert: DbRecord<{
+    id?: string;
+    file_name: string;
+    storage_path?: string | null;
+    anio: number;
+    sheet_name?: string | null;
+    uploaded_by: string;
+    uploaded_at?: string;
+    status?: ImportStatus;
+    total_rows?: number;
+    valid_rows?: number;
+    error_rows?: number;
+    notes?: string | null;
+    data?: Json;
+  }>;
+  Update: DbRecord<Partial<ImportTable["Insert"]>>;
+  Relationships: [
+    {
+      foreignKeyName: string;
+      columns: ["uploaded_by"];
+      isOneToOne: false;
+      referencedRelation: "profiles";
+      referencedColumns: ["id"];
+    },
+  ];
+};
+
+export type Database = {
+  public: {
+    Tables: {
+      profiles: ProfileTable;
+      imports: ImportTable;
+      accounting_imports: ImportTable;
+      budget_imports: ImportTable;
+    };
+    Views: Record<never, never>;
+    Functions: Record<never, never>;
+    Enums: {
+      app_role: AppRole;
+      import_status: ImportStatus;
+    };
+    CompositeTypes: Record<never, never>;
+  };
+};
