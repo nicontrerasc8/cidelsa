@@ -4,6 +4,7 @@ import { executiveDashboardRoles } from "@/lib/auth/roles";
 import { requireRoleAccess } from "@/lib/auth/authorization";
 import type { AppRole } from "@/lib/types/database";
 import { getCachedNormalizedDashboardImportRows } from "@/modules/dashboard/services/dashboard-source-cache";
+import { isBillingSituation } from "@/modules/dashboard/services/import-payload";
 
 export type SalesByClientRow = {
   importYear: number | null;
@@ -32,7 +33,7 @@ async function loadSalesByClientSummary(): Promise<SalesByClientSummary> {
   const ejecutivoSet = new Set<string>();
 
   for (const row of data) {
-    if (row.situacion !== "facturado" || !row.cliente || row.ventasMonto === null) continue;
+    if (!isBillingSituation(row.situacion) || !row.cliente || row.ventasMonto === null) continue;
 
     if (row.importYear !== null) yearSet.add(row.importYear);
     if (row.negocio) negocioSet.add(row.negocio);

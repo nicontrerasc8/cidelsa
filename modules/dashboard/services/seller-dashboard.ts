@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getExecutiveImportRows } from "@/modules/dashboard/services/executive-imports";
+import { isBillingSituation } from "@/modules/dashboard/services/import-payload";
 
 export type SellerDashboardRow = {
   anio: number | null;
@@ -57,7 +58,7 @@ export async function getSellerDashboardSummary(): Promise<SellerDashboardSummar
     lineas: [...lineaSet].sort((a, b) => a.localeCompare(b)),
     totalVentas: rows.reduce((sum, row) => sum + row.ventasMonto, 0),
     totalFacturado: rows
-      .filter((row) => row.fechaFacturacion || row.situacion === "facturado")
+      .filter((row) => row.fechaFacturacion || isBillingSituation(row.situacion))
       .reduce((sum, row) => sum + row.ventasMonto, 0),
     registros: rows.length,
     clientesActivos: clientSet.size,

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { importYearSchema } from "@/lib/validators/imports";
 import { canAccessImports } from "@/modules/imports/services/import-service";
 import {
+  saveAccountingBudgetImportFromPreview,
   createAccountingImportFromUpload,
   saveAccountingImportFromPreview,
 } from "@/modules/imports/services/accounting-import-service";
@@ -31,7 +32,29 @@ export async function POST(request: Request) {
         importYear?: number;
         sheetName?: string;
         monthlyRowsBySection?: unknown;
+        rowsBySection?: unknown;
       };
+
+      if (
+        typeof body.fileName === "string" &&
+        typeof body.sheetName === "string" &&
+        body.rowsBySection &&
+        typeof body.rowsBySection === "object"
+      ) {
+        const result = await saveAccountingBudgetImportFromPreview(
+          {
+            fileName: body.fileName,
+            importYear: importYearSchema.parse(body.importYear),
+            sheetName: body.sheetName,
+            rowsBySection: body.rowsBySection as Parameters<
+              typeof saveAccountingBudgetImportFromPreview
+            >[0]["rowsBySection"],
+          },
+          currentUser,
+        );
+
+        return NextResponse.json(result, { status: 201 });
+      }
 
       if (
         typeof body.fileName !== "string" ||

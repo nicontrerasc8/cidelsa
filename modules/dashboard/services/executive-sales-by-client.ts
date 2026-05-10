@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SalesByClientSummary } from "@/modules/dashboard/services/sales-by-client";
 import { getExecutiveImportRows } from "@/modules/dashboard/services/executive-imports";
+import { isBillingSituation } from "@/modules/dashboard/services/import-payload";
 
 export async function getExecutiveSalesByClientSummary(): Promise<SalesByClientSummary> {
   const importRows = await getExecutiveImportRows();
@@ -13,7 +14,7 @@ export async function getExecutiveSalesByClientSummary(): Promise<SalesByClientS
   const ejecutivoSet = new Set<string>();
 
   for (const row of importRows) {
-    if (row.situacion !== "facturado" || !row.cliente || row.ventasMonto === null) continue;
+    if (!isBillingSituation(row.situacion) || !row.cliente || row.ventasMonto === null) continue;
 
     if (row.importYear !== null) yearSet.add(row.importYear);
     if (row.negocio) negocioSet.add(row.negocio);

@@ -53,8 +53,9 @@ const CHART_COLORS = [
   "#a3e635",
   "#fb7185",
 ] as const;
+const ACCOUNTING_BUDGET_DISPLAY_DIVISOR = 1000;
 
-type DashboardMode = "accounting" | "budget" | "comparison";
+type DashboardMode = "accounting" | "accounting-budget" | "budget" | "comparison";
 type SummaryRow = FinancialSummary["rows"][number];
 type Totals = {
   previous: number;
@@ -181,6 +182,21 @@ function buildMetricRows(
   }));
 }
 
+function normalizeDisplayRows(mode: DashboardMode, rows: SummaryRow[]) {
+  if (mode !== "accounting-budget") return rows;
+
+  return rows.map((row) => ({
+    ...row,
+    previousAmount: row.previousAmount / ACCOUNTING_BUDGET_DISPLAY_DIVISOR,
+    plannedAmount: row.plannedAmount / ACCOUNTING_BUDGET_DISPLAY_DIVISOR,
+    actualAmount: row.actualAmount / ACCOUNTING_BUDGET_DISPLAY_DIVISOR,
+    grossMargin:
+      row.grossMargin === null
+        ? null
+        : row.grossMargin / ACCOUNTING_BUDGET_DISPLAY_DIVISOR,
+  }));
+}
+
 function Surface({
   children,
   className = "",
@@ -190,7 +206,7 @@ function Surface({
 }) {
   return (
     <div
-      className={`rounded-3xl border border-slate-800 bg-slate-900/40 backdrop-blur ${className}`}
+      className={`min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 backdrop-blur ${className}`}
     >
       {children}
     </div>
@@ -303,6 +319,45 @@ function ChartTooltip({
 }
 
 function buildDashboardCopy(mode: DashboardMode, totals: Totals) {
+  if (mode === "accounting-budget") {
+    return {
+      eyebrow: "Dashboard financiero",
+      title: "Contabilidad",
+      subtitle: "Vista mensual contable con estructura de presupuesto por año, periodo y categoría.",
+      chartTitle: "Contabilidad y MG por periodo",
+      chartSubtitle: "Ventas planificadas y margen bruto desde las cargas contables.",
+      distributionTitle: "Participación por categoría",
+      distributionSubtitle: "Distribución de ventas contables por grupo.",
+      emptyLabel: "No hay datos contables para los filtros seleccionados.",
+      kpis: [
+        {
+          title: "Contabilidad",
+          value: formatFullCurrency(totals.planned),
+          subtitle: "Total visible",
+          icon: <Target className="size-5" />,
+        },
+        {
+          title: "MG contable",
+          value: formatFullCurrency(totals.grossMargin),
+          subtitle: "Margen bruto visible",
+          icon: <TrendingUp className="size-5" />,
+        },
+        {
+          title: "MG %",
+          value: formatPercent(totals.planned ? (totals.grossMargin / totals.planned) * 100 : null),
+          subtitle: "Margen sobre contabilidad",
+          icon: <Scale className="size-5" />,
+        },
+        {
+          title: "Lineas",
+          value: new Intl.NumberFormat("es-PE").format(totals.lineCount),
+          subtitle: "Lineas contables visibles",
+          icon: <Calculator className="size-5" />,
+        },
+      ],
+    };
+  }
+
   if (mode === "accounting") {
     return {
       eyebrow: "Dashboard financiero",
@@ -433,7 +488,7 @@ export function FinancialFocusDashboard({
 
   const selectedYearNumber = selectedYear === ALL_VALUE ? null : Number(selectedYear);
 
-  const filteredRows = useMemo(
+  const rawFilteredRows = useMemo(
     () =>
       summary.rows.filter((row) => {
         if (selectedYearNumber !== null && row.importYear !== selectedYearNumber) return false;
@@ -444,18 +499,23 @@ export function FinancialFocusDashboard({
       }),
     [selectedGroup, selectedNegocio, selectedPeriod, selectedYearNumber, summary.rows],
   );
+  const filteredRows = useMemo(
+    () => normalizeDisplayRows(mode, rawFilteredRows),
+    [mode, rawFilteredRows],
+  );
 
   const totals = useMemo(() => buildTotals(filteredRows), [filteredRows]);
   const copy = buildDashboardCopy(mode, totals);
+  const isBudgetPresentation = mode === "budget" || mode === "accounting-budget";
 
   const metricRows = useMemo(
     () =>
       buildMetricRows(filteredRows, (row) => row.grupo).sort((a, b) => {
-        if (mode === "budget") return b.planned - a.planned;
+        if (isBudgetPresentation) return b.planned - a.planned;
         if (mode === "comparison") return b.actual - a.actual;
         return b.actual - a.actual;
       }),
-    [filteredRows, mode],
+    [filteredRows, isBudgetPresentation, mode],
   );
 
   const evolutionRows = useMemo(() => {
@@ -476,7 +536,7 @@ export function FinancialFocusDashboard({
     .map((row) => ({
       name: row.name,
       value:
-        mode === "budget"
+        isBudgetPresentation
           ? row.planned
           : mode === "comparison"
             ? row.actual
@@ -542,14 +602,14 @@ export function FinancialFocusDashboard({
           ))}
         </div>
 
-        <div className="mt-8 grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <div className="mt-8 grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <Surface className="p-6">
             <h2 className="text-xl font-semibold text-white">{copy.chartTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{copy.chartSubtitle}</p>
 
-            <div className="mt-6 h-[420px]">
+            <div className="mt-6 h-[420px] min-h-[420px] min-w-0">
               {chartRows.length ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={420} minWidth={0}>
                   <ComposedChart data={chartRows}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis dataKey="name" stroke="#64748b" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
@@ -578,10 +638,10 @@ export function FinancialFocusDashboard({
                         <Line yAxisId="right" type="monotone" dataKey="marginPct" name="Margen %" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} />
                       </>
                     ) : null}
-                    {mode === "budget" ? (
+                    {isBudgetPresentation ? (
                       <>
-                        <Bar yAxisId="left" dataKey="planned" name="Presupuesto" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                        <Bar yAxisId="left" dataKey="grossMargin" name="MG presupuestado" fill="#10b981" radius={[8, 8, 0, 0]} />
+                        <Bar yAxisId="left" dataKey="planned" name={mode === "accounting-budget" ? "Contabilidad" : "Presupuesto"} fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                        <Bar yAxisId="left" dataKey="grossMargin" name={mode === "accounting-budget" ? "MG contable" : "MG presupuestado"} fill="#10b981" radius={[8, 8, 0, 0]} />
                         <Line yAxisId="right" type="monotone" dataKey="marginPct" name="MG %" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4 }} />
                       </>
                     ) : null}
@@ -604,9 +664,9 @@ export function FinancialFocusDashboard({
             <h2 className="text-xl font-semibold text-white">{copy.distributionTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{copy.distributionSubtitle}</p>
 
-            <div className="mt-6 h-[320px]">
+            <div className="mt-6 h-[320px] min-h-[320px] min-w-0">
               {distributionRows.length ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={320} minWidth={0}>
                   <PieChart>
                     <Pie
                       data={distributionRows}
@@ -661,11 +721,15 @@ export function FinancialFocusDashboard({
               <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.2em] text-slate-500">
                 <tr>
                   <th className="px-6 py-4">Categoría</th>
-                  {mode !== "budget" ? <th className="px-6 py-4 text-right">Real</th> : null}
-                  {mode !== "accounting" ? <th className="px-6 py-4 text-right">Presupuesto</th> : null}
-                  {mode !== "budget" ? <th className="px-6 py-4 text-right">Cierre previo</th> : null}
+                  {!isBudgetPresentation ? <th className="px-6 py-4 text-right">Real</th> : null}
+                  {mode !== "accounting" ? (
+                    <th className="px-6 py-4 text-right">
+                      {mode === "accounting-budget" ? "Contabilidad" : "Presupuesto"}
+                    </th>
+                  ) : null}
+                  {!isBudgetPresentation ? <th className="px-6 py-4 text-right">Cierre previo</th> : null}
                   <th className="px-6 py-4 text-right">Margen</th>
-                  {mode === "budget" ? <th className="px-6 py-4 text-right">MG %</th> : null}
+                  {isBudgetPresentation ? <th className="px-6 py-4 text-right">MG %</th> : null}
                   {mode === "comparison" ? <th className="px-6 py-4 text-right">Cumplimiento</th> : null}
                   <th className="px-6 py-4 text-right">Líneas</th>
                 </tr>
@@ -675,7 +739,7 @@ export function FinancialFocusDashboard({
                   metricRows.map((row) => (
                     <tr key={row.name} className="hover:bg-white/5">
                       <td className="px-6 py-4 font-medium text-white">{row.name}</td>
-                      {mode !== "budget" ? (
+                      {!isBudgetPresentation ? (
                         <td className="px-6 py-4 text-right text-slate-200">
                           {formatFullCurrency(row.actual)}
                         </td>
@@ -685,7 +749,7 @@ export function FinancialFocusDashboard({
                           {formatFullCurrency(row.planned)}
                         </td>
                       ) : null}
-                      {mode !== "budget" ? (
+                      {!isBudgetPresentation ? (
                         <td className="px-6 py-4 text-right text-slate-400">
                           {formatFullCurrency(row.previous)}
                         </td>
@@ -693,7 +757,7 @@ export function FinancialFocusDashboard({
                       <td className="px-6 py-4 text-right text-slate-200">
                         {formatFullCurrency(row.grossMargin)}
                       </td>
-                      {mode === "budget" ? (
+                      {isBudgetPresentation ? (
                         <td className="px-6 py-4 text-right text-slate-200">
                           {formatPercent(row.marginPct)}
                         </td>

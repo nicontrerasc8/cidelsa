@@ -2,6 +2,7 @@ import "server-only";
 
 import type { BillingByLineSummary } from "@/modules/dashboard/services/billing-by-line";
 import { getExecutiveImportRows } from "@/modules/dashboard/services/executive-imports";
+import { isBillingSituation } from "@/modules/dashboard/services/import-payload";
 
 export async function getExecutiveBillingByLineSummary(): Promise<BillingByLineSummary> {
   const importRows = await getExecutiveImportRows();
@@ -11,7 +12,7 @@ export async function getExecutiveBillingByLineSummary(): Promise<BillingByLineS
   const negocioSet = new Set<string>();
 
   for (const row of importRows) {
-    if (row.fechaFacturacion === null && row.situacion !== "facturado") continue;
+    if (row.fechaFacturacion === null && !isBillingSituation(row.situacion)) continue;
     if (!row.linea || row.ventasMonto === null) continue;
 
     if (row.importYear !== null) yearSet.add(row.importYear);

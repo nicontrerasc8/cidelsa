@@ -16,16 +16,21 @@ export interface CurrentUser {
 export const getOptionalSession = cache(async () => {
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  return session;
+  if (error || !user) {
+    return null;
+  }
+
+  return { user };
 });
 
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
-  const session = await getOptionalSession();
+  const authenticated = await getOptionalSession();
 
-  if (!session?.user) {
+  if (!authenticated?.user) {
     return null;
   }
 
@@ -33,7 +38,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const { data, error } = await supabase
     .from("profiles")
     .select("id, email, full_name, role, is_active")
-    .eq("id", session.user.id)
+    .eq("id", authenticated.user.id)
     .single();
 
   if (error || !data || !data.is_active) {

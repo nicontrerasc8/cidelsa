@@ -18,6 +18,10 @@ import {
   type ParsedAccountingRow,
 } from "@/modules/imports/parser/accounting";
 import {
+  parseBudgetWorkbook,
+  type BudgetSection,
+} from "@/modules/imports/parser/budget";
+import {
   buildImportAudit,
   parseImportAudit,
   type ImportAudit,
@@ -59,6 +63,13 @@ type AccountingPreviewSaveInput = {
   importYear: number;
   sheetName: string;
   monthlyRowsBySection: Partial<Record<AccountingSection, AccountingPreviewSaveRow[]>>;
+};
+
+type AccountingBudgetPreviewSaveInput = {
+  fileName: string;
+  importYear: number;
+  sheetName: string;
+  rowsBySection: Partial<Record<BudgetSection, AccountingPreviewSaveRow[]>>;
 };
 
 export type AccountingImportRow = {
@@ -141,6 +152,20 @@ function assertAccountingGroup(section: AccountingSection, value: unknown) {
 
 function getAccountingBusinessFromSection(section: AccountingSection) {
   return section === "Comercial" ? "Geosinteticos" : "Industrial";
+}
+
+function getBudgetBusinessFromSection(section: BudgetSection) {
+  if (section === "Arquitectura") return "Arquitectura";
+  if (section === "Comercial") return "Geosinteticos";
+  return "Industrial";
+}
+
+function getBudgetGroupFromSection(section: BudgetSection, value: unknown) {
+  const normalized = toNullableString(value);
+  if (normalized) return normalized;
+  if (section === "Arquitectura") return "Arquitectura";
+  if (section === "Comercial") return "Geoestructuras";
+  return "Industrial";
 }
 
 function normalizeAccountingImportRow(row: AccountingImportJsonRow): AccountingImportRow {
@@ -233,6 +258,14 @@ function flattenMonthlySectionRows(rows: AccountingMonthlySectionRow[]) {
   }));
 }
 
+function buildRowsByBudgetSectionPreview(parsed: Awaited<ReturnType<typeof parseBudgetWorkbook>>) {
+  return {
+    Arquitectura: parsed.rowsBySection.Arquitectura.map((row) => row.payload),
+    Comercial: parsed.rowsBySection.Comercial.map((row) => row.payload),
+    Industrial: parsed.rowsBySection.Industrial.map((row) => row.payload),
+  };
+}
+
 function buildImportSourceRef(fileName: string, userId: string) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const normalizedFileName = fileName.replace(/[^a-zA-Z0-9._-]+/g, "-");
@@ -320,6 +353,37 @@ export async function createAccountingImportFromUpload(
   importYear: number,
 ) {
   validateImportFile(file);
+  const parsedBudget = await parseBudgetWorkbook(file);
+
+  if (parsedBudget.parsedRows.length > 0) {
+    const rowsBySection = buildRowsByBudgetSectionPreview(parsedBudget);
+
+    console.groupCollapsed("[accounting-imports][service] Excel contable con formato presupuesto leido");
+    console.log("archivo", file.name);
+    console.log("usuario", currentUser.id);
+    console.log("anio_importacion", importYear);
+    console.log("hoja", parsedBudget.sheetName);
+    console.log("filas_arquitectura", rowsBySection.Arquitectura);
+    console.table(rowsBySection.Arquitectura);
+    console.log("filas_comercial", rowsBySection.Comercial);
+    console.table(rowsBySection.Comercial);
+    console.log("filas_industrial", rowsBySection.Industrial);
+    console.table(rowsBySection.Industrial);
+    console.groupEnd();
+
+    return {
+      fileName: file.name,
+      importYear,
+      sheetName: parsedBudget.sheetName,
+      columns: parsedBudget.columns,
+      previewRows: parsedBudget.previewRows,
+      rowsBySection,
+      totalRows: parsedBudget.parsedRows.length,
+      validRows: parsedBudget.parsedRows.filter((row) => row.parseStatus === "valid").length,
+      errorRows: parsedBudget.parsedRows.filter((row) => row.parseStatus === "error").length,
+    };
+  }
+
   const parsed = await parseAccountingWorkbook(file);
   const importData = buildImportData(parsed);
 
@@ -439,6 +503,62 @@ function normalizeAccountingPreviewSaveRows(input: AccountingPreviewSaveInput) {
   return rows;
 }
 
+function normalizeAccountingBudgetPreviewSaveRows(input: AccountingBudgetPreviewSaveInput) {
+  const rows: AccountingImportJsonRow[] = [];
+
+  for (const section of ["Arquitectura", "Comercial", "Industrial"] as const) {
+    const sectionRows = input.rowsBySection[section] ?? [];
+
+    for (const row of sectionRows) {
+      const rowNumber = toNullableNumber(row.fila_excel);
+
+      if (rowNumber === null) {
+        throw new Error("No se pudo identificar la fila Excel de una linea contable.");
+      }
+
+      rows.push({
+        id: rowNumber,
+        row_number: rowNumber,
+        parse_status: "valid",
+        parse_errors: [],
+        payload: {
+          seccion: section,
+          negocio: getBudgetBusinessFromSection(section),
+          grupo: getBudgetGroupFromSection(section, row.grupo),
+          linea_original: row.linea_original ?? row.linea ?? null,
+          linea: toNullableString(row.linea) ?? toNullableString(row.linea_original),
+          enero_ventas: row.enero_ventas ?? null,
+          enero_margen_bruto: row.enero_margen_bruto ?? null,
+          febrero_ventas: row.febrero_ventas ?? null,
+          febrero_margen_bruto: row.febrero_margen_bruto ?? null,
+          marzo_ventas: row.marzo_ventas ?? null,
+          marzo_margen_bruto: row.marzo_margen_bruto ?? null,
+          abril_ventas: row.abril_ventas ?? null,
+          abril_margen_bruto: row.abril_margen_bruto ?? null,
+          mayo_ventas: row.mayo_ventas ?? null,
+          mayo_margen_bruto: row.mayo_margen_bruto ?? null,
+          junio_ventas: row.junio_ventas ?? null,
+          junio_margen_bruto: row.junio_margen_bruto ?? null,
+          julio_ventas: row.julio_ventas ?? null,
+          julio_margen_bruto: row.julio_margen_bruto ?? null,
+          agosto_ventas: row.agosto_ventas ?? null,
+          agosto_margen_bruto: row.agosto_margen_bruto ?? null,
+          setiembre_ventas: row.setiembre_ventas ?? null,
+          setiembre_margen_bruto: row.setiembre_margen_bruto ?? null,
+          octubre_ventas: row.octubre_ventas ?? null,
+          octubre_margen_bruto: row.octubre_margen_bruto ?? null,
+          noviembre_ventas: row.noviembre_ventas ?? null,
+          noviembre_margen_bruto: row.noviembre_margen_bruto ?? null,
+          diciembre_ventas: row.diciembre_ventas ?? null,
+          diciembre_margen_bruto: row.diciembre_margen_bruto ?? null,
+        },
+      });
+    }
+  }
+
+  return rows;
+}
+
 export async function saveAccountingImportFromPreview(
   input: AccountingPreviewSaveInput,
   currentUser: CurrentUser,
@@ -510,6 +630,101 @@ export async function saveAccountingImportFromPreview(
       error_rows: audit.invalidRows,
       sheet_name: input.sheetName,
       notes: `Hoja ${input.sheetName}. Archivo de contabilidad guardado desde preview mensual con grupo por fila.`,
+      data: importData,
+    })
+    .select("id")
+    .single();
+
+  if (error || !importRow) {
+    throw new Error("No se pudo guardar la importacion contable.");
+  }
+
+  revalidatePath("/dashboard/imports");
+  revalidatePath("/dashboard");
+  revalidateDashboardDataCache();
+
+  return {
+    id: importRow.id as string,
+    fileName: input.fileName,
+    importYear: input.importYear,
+    sheetName: input.sheetName,
+    totalRows: rows.length,
+    validRows: audit.validRows,
+    errorRows: audit.invalidRows,
+  };
+}
+
+export async function saveAccountingBudgetImportFromPreview(
+  input: AccountingBudgetPreviewSaveInput,
+  currentUser: CurrentUser,
+) {
+  const admin = createAdminSupabaseClient();
+  const rows = normalizeAccountingBudgetPreviewSaveRows(input);
+  const audit = buildImportAudit({
+    rows,
+    getRowNumber: (row) => row.row_number,
+    getPayload: (row) => row.payload,
+    getParseStatus: (row) => row.parse_status,
+    getParseErrors: (row) => row.parse_errors,
+  });
+  const importData = {
+    sheetName: input.sheetName,
+    columns: [
+      "seccion",
+      "negocio",
+      "grupo",
+      "linea",
+      "enero_ventas",
+      "enero_margen_bruto",
+      "febrero_ventas",
+      "febrero_margen_bruto",
+      "marzo_ventas",
+      "marzo_margen_bruto",
+      "abril_ventas",
+      "abril_margen_bruto",
+      "mayo_ventas",
+      "mayo_margen_bruto",
+      "junio_ventas",
+      "junio_margen_bruto",
+      "julio_ventas",
+      "julio_margen_bruto",
+      "agosto_ventas",
+      "agosto_margen_bruto",
+      "setiembre_ventas",
+      "setiembre_margen_bruto",
+      "octubre_ventas",
+      "octubre_margen_bruto",
+      "noviembre_ventas",
+      "noviembre_margen_bruto",
+      "diciembre_ventas",
+      "diciembre_margen_bruto",
+    ],
+    rows,
+    audit,
+  } satisfies AccountingImportJsonPayload;
+  const storagePath = buildImportSourceRef(input.fileName, currentUser.id);
+
+  console.groupCollapsed("[accounting-imports][service] Guardando preview contable con formato presupuesto");
+  console.log("archivo", input.fileName);
+  console.log("usuario", currentUser.id);
+  console.log("anio_importacion", input.importYear);
+  console.log("hoja", input.sheetName);
+  console.log("filas", rows);
+  console.groupEnd();
+
+  const { data: importRow, error } = await admin
+    .from("accounting_imports")
+    .insert({
+      file_name: input.fileName,
+      storage_path: storagePath,
+      anio: input.importYear,
+      uploaded_by: currentUser.id,
+      status: "processed",
+      total_rows: rows.length,
+      valid_rows: audit.validRows,
+      error_rows: audit.invalidRows,
+      sheet_name: input.sheetName,
+      notes: `Hoja ${input.sheetName}. Archivo de contabilidad guardado desde preview con estructura de presupuesto.`,
       data: importData,
     })
     .select("id")

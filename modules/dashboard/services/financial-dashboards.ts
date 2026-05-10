@@ -13,6 +13,7 @@ import {
   getCachedProcessedBudgetImports,
   getCachedProcessedImports,
 } from "@/modules/dashboard/services/dashboard-source-cache";
+import presupuesto26 from "@/public/Presupuesto26.json";
 
 export type FinancialMetricRow = {
   importYear: number;
@@ -39,6 +40,27 @@ export type FinancialSummary<T extends FinancialMetricRow = FinancialMetricRow> 
   rows: T[];
 };
 
+export type BudgetVsAccountingRow = {
+  currentYear: number;
+  previousYear: number;
+  negocio: string;
+  linea: string;
+  periodo: string;
+  previousReal: number;
+  currentBudget: number;
+  currentReal: number;
+  grossMargin: number;
+};
+
+export type BudgetVsAccountingSummary = {
+  currentYear: number;
+  previousYear: number;
+  negocios: string[];
+  lineas: string[];
+  periodos: string[];
+  rows: BudgetVsAccountingRow[];
+};
+
 const MONTHLY_ACCOUNTING_FIELDS = [
   { periodo: "Enero", ventas: "enero_ventas", margenBruto: "enero_margen_bruto" },
   { periodo: "Febrero", ventas: "febrero_ventas", margenBruto: "febrero_margen_bruto" },
@@ -56,6 +78,7 @@ const MONTHLY_ACCOUNTING_FIELDS = [
 
 const MONTHLY_ACCOUNTING_AMOUNT_MULTIPLIER = 1000;
 const BUDGET_AMOUNT_MULTIPLIER = 1;
+const BUDGET_VS_ACCOUNTING_REAL_DIVISOR = MONTHLY_ACCOUNTING_AMOUNT_MULTIPLIER;
 
 type RawImportItem = {
   anio: number;
@@ -82,6 +105,33 @@ function normalizeText(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeComparableText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeBusinessLabel(value: string) {
+  const comparable = normalizeComparableText(value);
+
+  if (comparable === "GEOSINTETICOS" || comparable === "COMERCIAL") {
+    return "Geosinteticos";
+  }
+
+  if (comparable === "INDUSTRIAL") {
+    return "Industrial";
+  }
+
+  if (comparable === "ARQUITECTURA") {
+    return "Arquitectura";
+  }
+
+  return value.trim();
 }
 
 function normalizeNumber(value: unknown) {
@@ -132,6 +182,20 @@ function normalizeMonthlyAccountingGrossMargin(
 function normalizeBudgetAmount(value: unknown) {
   const amount = normalizeNumber(value);
   return amount === null ? null : amount * BUDGET_AMOUNT_MULTIPLIER;
+}
+
+function normalizeBudgetVsAccountingRealAmount(row: FinancialMetricRow) {
+  if (row.actualAmount) return row.actualAmount;
+  if (row.previousAmount) return row.previousAmount;
+
+  return row.plannedAmount / BUDGET_VS_ACCOUNTING_REAL_DIVISOR;
+}
+
+function normalizeBudgetVsAccountingGrossMargin(row: FinancialMetricRow) {
+  if (!row.grossMargin) return 0;
+  if (row.actualAmount || row.previousAmount) return row.grossMargin;
+
+  return row.grossMargin / BUDGET_VS_ACCOUNTING_REAL_DIVISOR;
 }
 
 const loadLineToBusinessMap = unstable_cache(
@@ -254,8 +318,8 @@ const loadFinancialSourceRows = unstable_cache(
               periodo: field.periodo,
               linea,
               previousAmount: 0,
-              plannedAmount: 0,
-              actualAmount: actualAmount ?? 0,
+              plannedAmount: actualAmount ?? 0,
+              actualAmount: 0,
               grossMargin,
             });
           }
@@ -377,6 +441,17 @@ export async function getBudgetAccountingComparisonSummary() {
   return loadBudgetAccountingComparisonSummary();
 }
 
+export async function getBudgetVsAccountingSummary() {
+  await requireRoleAccess([...executiveDashboardRoles] as AppRole[]);
+  return loadBudgetVsAccountingSummary();
+}
+
+export function buildBudgetVsAccountingSummaryFromAccountingSummary(
+  accountingSummary: FinancialSummary,
+) {
+  return buildBudgetVsAccountingSummaryFromRows(accountingSummary.rows);
+}
+
 const loadAccountingDashboardSummary = unstable_cache(
   async () => {
     const rows = await loadFinancialSourceRows();
@@ -437,4 +512,138 @@ const loadBudgetAccountingComparisonSummary = unstable_cache(
   },
   ["financial-budget-accounting-comparison-summary"],
   { tags: [DASHBOARD_IMPORTS_TAG, DASHBOARD_ACCOUNTING_TAG, DASHBOARD_BUDGET_TAG] },
+);
+
+type BudgetProductMonths = Record<string, number>;
+type BudgetCategory = {
+  productos?: Record<string, BudgetProductMonths>;
+};
+
+function getStaticBudget() {
+  const root = presupuesto26 as Record<string, unknown>;
+  const entry = Object.entries(root).find(([key]) => key.startsWith("presupuesto_ventas_"));
+  if (!entry || !isRecord(entry[1])) {
+    return null;
+  }
+
+  const yearMatch = entry[0].match(/(\d{4})/);
+  const currentYear = yearMatch ? Number(yearMatch[1]) : null;
+  const categorias = isRecord(entry[1].categorias) ? entry[1].categorias : null;
+  if (!currentYear || !categorias) return null;
+
+  return {
+    currentYear,
+    categorias: categorias as Record<string, BudgetCategory>,
+  };
+}
+
+function buildBudgetVsAccountingSummaryFromRows(
+  accountingRows: FinancialMetricRow[],
+): BudgetVsAccountingSummary {
+    const staticBudget = getStaticBudget();
+    if (!staticBudget) {
+      return {
+        currentYear: new Date().getFullYear(),
+        previousYear: new Date().getFullYear() - 1,
+        negocios: [],
+        lineas: [],
+        periodos: [...MONTHLY_ACCOUNTING_FIELDS.map((field) => field.periodo)],
+        rows: [],
+      };
+    }
+
+    const { currentYear, categorias } = staticBudget;
+    const previousYear = currentYear - 1;
+    const rowsByKey = new Map<string, BudgetVsAccountingRow>();
+    const lineLabels = new Map<string, string>();
+
+    function getOrCreateRow({
+      negocio,
+      linea,
+      periodo,
+    }: {
+      negocio: string;
+      linea: string;
+      periodo: string;
+    }) {
+      const normalizedBusiness = normalizeBusinessLabel(negocio);
+      const normalizedLine = normalizeComparableText(linea);
+      const key = `${normalizeComparableText(normalizedBusiness)}::${normalizedLine}::${periodo}`;
+      const current =
+        rowsByKey.get(key) ??
+        {
+          currentYear,
+          previousYear,
+          negocio: normalizedBusiness,
+          linea,
+          periodo,
+          previousReal: 0,
+          currentBudget: 0,
+          currentReal: 0,
+          grossMargin: 0,
+        };
+
+      lineLabels.set(normalizedLine, linea);
+      rowsByKey.set(key, current);
+      return current;
+    }
+
+    for (const [negocio, category] of Object.entries(categorias)) {
+      if (!isRecord(category.productos)) continue;
+
+      for (const [linea, monthlyValues] of Object.entries(category.productos)) {
+        if (!isRecord(monthlyValues)) continue;
+
+        for (const field of MONTHLY_ACCOUNTING_FIELDS) {
+          const monthNumber = String(MONTHLY_ACCOUNTING_FIELDS.indexOf(field) + 1).padStart(2, "0");
+          const budgetAmount = normalizeBudgetAmount(monthlyValues[`${currentYear}-${monthNumber}`]);
+          if (budgetAmount === null) continue;
+
+          const row = getOrCreateRow({ negocio, linea, periodo: field.periodo });
+          row.currentBudget += budgetAmount;
+        }
+      }
+    }
+
+    for (const row of accountingRows) {
+      if (!row.periodo || !row.linea) continue;
+      if (row.importYear !== currentYear && row.importYear !== previousYear) continue;
+
+      const negocio = row.negocio ?? row.grupo ?? "Sin negocio";
+      const target = getOrCreateRow({
+        negocio,
+        linea: row.linea,
+        periodo: row.periodo,
+      });
+      const accountingAmount = normalizeBudgetVsAccountingRealAmount(row);
+
+      if (row.importYear === currentYear) {
+        target.currentReal += accountingAmount;
+        target.grossMargin += normalizeBudgetVsAccountingGrossMargin(row);
+      } else {
+        target.previousReal += accountingAmount;
+      }
+    }
+
+    const rows = [...rowsByKey.values()].filter(
+      (row) => row.previousReal || row.currentBudget || row.currentReal || row.grossMargin,
+    );
+
+    return {
+      currentYear,
+      previousYear,
+      negocios: [...new Set(rows.map((row) => row.negocio))].sort((a, b) => a.localeCompare(b, "es")),
+      lineas: [...lineLabels.values()].sort((a, b) => a.localeCompare(b, "es")),
+      periodos: [...MONTHLY_ACCOUNTING_FIELDS.map((field) => field.periodo)],
+      rows,
+    };
+}
+
+const loadBudgetVsAccountingSummary = unstable_cache(
+  async (): Promise<BudgetVsAccountingSummary> => {
+    const rows = await loadFinancialSourceRows();
+    return buildBudgetVsAccountingSummaryFromRows(rows.filter((row) => row.source === "accounting"));
+  },
+  ["financial-budget-vs-accounting-summary-v3"],
+  { tags: [DASHBOARD_ACCOUNTING_TAG, DASHBOARD_BUDGET_TAG] },
 );

@@ -136,7 +136,30 @@ export function getPayloadCliente(payload: Record<string, unknown>) {
 }
 
 export function getPayloadNegocio(payload: Record<string, unknown>) {
-  return normalizeText(payload.negocio) ?? normalizeText(payload.sector);
+  return normalizeCommercialCategory(normalizeText(payload.negocio) ?? normalizeText(payload.sector));
+}
+
+export function normalizeCommercialCategory(value: string | null) {
+  if (!value) return null;
+
+  const comparable = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (comparable === "geosinteticos") return "Geosinteticos";
+  if (comparable === "industrial") return "Industrial";
+  if (
+    comparable === "tensionada" ||
+    comparable === "tensoestructura" ||
+    comparable === "tensoestructurada"
+  ) {
+    return "Tensoestructura";
+  }
+
+  return value;
 }
 
 export function getPayloadEjecutivo(payload: Record<string, unknown>) {
@@ -174,9 +197,23 @@ export function getPayloadPipeline(payload: Record<string, unknown>) {
   return "proyeccion";
 }
 
+export function isBillingSituation(situation: string | null) {
+  return situation === "facturado" || situation === "valorizacion";
+}
+
+export function isCurrentPortfolioSituation(situation: string | null) {
+  return (
+    situation === "facturado" ||
+    situation === "valorizacion" ||
+    situation === "proyecto" ||
+    situation === "por facturar" ||
+    situation === "pendiente"
+  );
+}
+
 export function hasFacturacion(payload: Record<string, unknown>) {
   return (
-    normalizeSituation(payload.situacion) === "facturado" ||
+    isBillingSituation(normalizeSituation(payload.situacion)) ||
     normalizeText(payload.fecha_facturacion) !== null
   );
 }

@@ -11,7 +11,6 @@ import {
   Download,
   LoaderCircle,
   PencilLine,
-  Target,
   Trash2,
   UploadCloud,
 } from "lucide-react";
@@ -903,7 +902,7 @@ function ImportUploadCard({
     if (!preview?.rowsBySection) return;
 
     if (budgetPreviewRowCount === 0) {
-      toast.error("No hay filas de presupuesto para guardar.");
+      toast.error("No hay filas contables para guardar.");
       return;
     }
 
@@ -942,7 +941,7 @@ function ImportUploadCard({
         const payload = (await response.json()) as { error?: string };
 
         if (!response.ok) {
-          throw new Error(payload.error ?? "No se pudo guardar el presupuesto.");
+          throw new Error(payload.error ?? "No se pudo guardar la contabilidad.");
         }
 
         router.refresh();
@@ -1278,7 +1277,7 @@ function ImportUploadCard({
                   ) : (
                     <UploadCloud className="size-4" />
                   )}
-                  Guardar presupuesto
+                  Guardar contabilidad
                 </Button>
               </div>
             </div>
@@ -1510,11 +1509,9 @@ function ImportHistoryCard({
 export function ImportsPageView({
   imports,
   accountingImports,
-  budgetImports,
 }: {
   imports: ImportRecord[];
   accountingImports: ImportRecord[];
-  budgetImports: ImportRecord[];
 }) {
   const [activeImportTab, setActiveImportTab] = useState("ax");
 
@@ -1529,7 +1526,7 @@ export function ImportsPageView({
             Flujo de carga
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-            Gestiona cargas independientes para AX comercial, contabilidad y presupuestos.
+            Gestiona cargas independientes para AX comercial y contabilidad.
           </p>
         </div>
       </section>
@@ -1550,13 +1547,6 @@ export function ImportsPageView({
             >
               <Calculator className="mr-2 size-4" />
               Contabilidad
-            </TabsTrigger>
-            <TabsTrigger
-              value="budget"
-              className="min-h-11 rounded-2xl px-4 py-2 text-sm font-semibold text-slate-300 transition data-[state=active]:bg-white data-[state=active]:text-slate-950"
-            >
-              <Target className="mr-2 size-4" />
-              Presupuestos
             </TabsTrigger>
           </TabsList>
         </div>
@@ -1588,9 +1578,9 @@ export function ImportsPageView({
           <ImportUploadCard
             title="Subir Excel de contabilidad"
             eyebrow="Cargas contables"
-            description="Carga contable temporal para revisar el archivo completo: lee todas las filas y marca cuando la columna A coincide con 1. TENSOESTRUCTURA, Geosinteticos o Industrial."
+            description="Carga contable por secciones desde la columna A. Cada linea usa pares mensuales: ventas y MG de enero a diciembre."
             uploadEndpoint="/api/accounting-imports"
-            successMessage="Excel contable leído correctamente. Revisa la consola para ver las filas."
+            successMessage="Excel contable procesado correctamente."
             consoleLabel="[accounting-imports] Excel cargado"
             accentClassName="bg-[linear-gradient(90deg,#17456d_0%,#2d7f73_100%)]"
           />
@@ -1599,27 +1589,10 @@ export function ImportsPageView({
             imports={accountingImports}
             deleteEndpointBase="/api/accounting-imports"
             editBasePath="/dashboard/imports/contabilidad"
-            emptyLabel="No hay importaciones contables registradas todavía."
+            emptyLabel="No hay importaciones contables registradas todavia."
           />
         </TabsContent>
 
-        <TabsContent value="budget" className="m-0 space-y-6">
-          <ImportUploadCard
-            title="Subir Excel de presupuestos"
-            eyebrow="Cargas de presupuesto"
-            description="Carga el presupuesto por secciones desde la columna A. Cada línea usa pares mensuales: ventas y MG de enero a diciembre."
-            uploadEndpoint="/api/budget-imports"
-            successMessage="Excel de presupuestos procesado correctamente."
-            consoleLabel="[budget-imports] Excel cargado"
-            accentClassName="bg-[linear-gradient(90deg,#23504f_0%,#5f7f3b_100%)]"
-          />
-          <ImportHistoryCard
-            title="Historial reciente presupuestos"
-            imports={budgetImports}
-            deleteEndpointBase="/api/budget-imports"
-            emptyLabel="No hay importaciones de presupuestos registradas todavía."
-          />
-        </TabsContent>
       </Tabs>
     </div>
   );

@@ -1,10 +1,8 @@
 import "server-only";
 
 import { getBillingByLineSummary } from "@/modules/dashboard/services/billing-by-line";
-import {
-  getAccountingDashboardSummary,
-  getBudgetDashboardSummary,
-} from "@/modules/dashboard/services/financial-dashboards";
+import { getCurrentPortfolioSummary } from "@/modules/dashboard/services/current-portfolio";
+import { buildBudgetVsAccountingSummaryFromAccountingSummary, getAccountingDashboardSummary } from "@/modules/dashboard/services/financial-dashboards";
 import { getSalesByClientSummary } from "@/modules/dashboard/services/sales-by-client";
 import { getSalesByExecutiveSummary } from "@/modules/dashboard/services/sales-by-executive";
 import { getExecutiveBacklogMatrixSummary } from "@/modules/dashboard/services/executive-backlog-matrix";
@@ -21,22 +19,24 @@ export async function getExecutiveDashboardBundle() {
     salesByClient,
     billingByLine,
     salesByExecutive,
+    currentPortfolio,
     accounting,
-    budget,
   ] = await Promise.all([
     getSalesByClientSummary(),
     getBillingByLineSummary(),
     getSalesByExecutiveSummary(),
+    getCurrentPortfolioSummary(),
     getAccountingDashboardSummary(),
-    getBudgetDashboardSummary(),
   ]);
+  const budgetVsAccounting = buildBudgetVsAccountingSummaryFromAccountingSummary(accounting);
 
   return {
     salesByClient,
     billingByLine,
     salesByExecutive,
+    currentPortfolio,
     accounting,
-    budget,
+    budgetVsAccounting,
   };
 }
 

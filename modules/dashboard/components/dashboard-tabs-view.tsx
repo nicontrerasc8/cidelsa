@@ -6,7 +6,6 @@ import {
   BriefcaseBusiness,
   FolderKanban,
   GitCompareArrows,
-  Target,
   TrendingUp,
   User,
   UserRound,
@@ -15,8 +14,9 @@ import {
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BacklogMatrixDashboard } from "@/modules/dashboard/components/backlog-matrix-dashboard";
 import { BillingByLineDashboard } from "@/modules/dashboard/components/billing-by-line-dashboard";
+import { BudgetVsAccountingDashboard } from "@/modules/dashboard/components/budget-vs-accounting-dashboard";
+import { CurrentPortfolioDashboard } from "@/modules/dashboard/components/current-portfolio-dashboard";
 import { FinancialFocusDashboard } from "@/modules/dashboard/components/financial-focus-dashboard";
 import { SalesByClientDashboard } from "@/modules/dashboard/components/sales-by-client-dashboard";
 import { SalesByExecutiveDashboard } from "@/modules/dashboard/components/sales-by-executive-dashboard";
@@ -100,12 +100,12 @@ export function ExecutiveDashboardTabsView({
         icon: TrendingUp,
         content: <SalesYearComparisonDashboard summary={bundle.salesByClient} />,
       },
-      {
-        id: "facturacion-linea",
-        label: "Facturacion por Linea",
-        icon: BriefcaseBusiness,
-        content: <BillingByLineDashboard summary={bundle.billingByLine} />,
-      },
+      // {
+      //   id: "facturacion-linea",
+      //   label: "Facturacion por Linea",
+      //   icon: BriefcaseBusiness,
+      //   content: <BillingByLineDashboard summary={bundle.billingByLine} />,
+      // },
       {
         id: "ejecutivos",
         label: "Ejecutivos",
@@ -113,16 +113,22 @@ export function ExecutiveDashboardTabsView({
         content: <SalesByExecutiveDashboard summary={bundle.salesByExecutive} />,
       },
       {
+        id: "estado-comercial",
+        label: "Estado Comercial",
+        icon: FolderKanban,
+        content: <CurrentPortfolioDashboard summary={bundle.currentPortfolio} />,
+      },
+      {
         id: "contabilidad",
         label: "Contabilidad",
         icon: GitCompareArrows,
-        content: <FinancialFocusDashboard mode="accounting" summary={bundle.accounting} />,
+        content: <FinancialFocusDashboard mode="accounting-budget" summary={bundle.accounting} />,
       },
       {
-        id: "presupuestos",
-        label: "Presupuestos",
-        icon: Target,
-        content: <FinancialFocusDashboard mode="budget" summary={bundle.budget} />,
+        id: "presupuesto-contabilidad",
+        label: "PPTO vs Real",
+        icon: GitCompareArrows,
+        content: <BudgetVsAccountingDashboard summary={bundle.budgetVsAccounting} />,
       },
     ],
     [bundle],

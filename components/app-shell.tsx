@@ -1,22 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import {
   Building2,
   LogOut,
   LayoutDashboard,
   Menu,
-  RefreshCw,
   UploadCloud,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { canAccessSidebarPath, roleLabels } from "@/lib/auth/roles";
 import type { CurrentUser } from "@/lib/auth/session";
 import { logoutAction } from "@/modules/auth/server/actions";
-import { refreshDashboardDataAction } from "@/modules/dashboard/server/actions";
 
 const navigation = [
   {
@@ -48,26 +46,10 @@ function SidebarContent({
   pathname: string;
   onNavigate?: () => void;
 }) {
-  const visibleNavigation = navigation.filter((item) => canAccessSidebarPath(user.role, item.href));
-  const router = useRouter();
-  const [isRefreshing, startRefreshing] = useTransition();
-  const prefetchTargets = useMemo(
-    () => visibleNavigation.map((item) => item.href).filter((href) => href !== pathname),
-    [pathname, visibleNavigation],
+  const visibleNavigation = useMemo(
+    () => navigation.filter((item) => canAccessSidebarPath(user.role, item.href)),
+    [user.role],
   );
-
-  useEffect(() => {
-    for (const href of prefetchTargets) {
-      router.prefetch(href);
-    }
-  }, [prefetchTargets, router]);
-
-  function handleRefresh() {
-    startRefreshing(async () => {
-      await refreshDashboardDataAction();
-      router.refresh();
-    });
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-between gap-6">
@@ -89,7 +71,7 @@ function SidebarContent({
               <Link
                 key={href}
                 href={href}
-                prefetch
+                prefetch={false}
                 onClick={onNavigate}
                 className={[
                   "group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition",
