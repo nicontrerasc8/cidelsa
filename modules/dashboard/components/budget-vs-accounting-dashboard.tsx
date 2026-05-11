@@ -29,6 +29,7 @@ type MetricRow = {
   variation: number;
   variationPct: number | null;
   achievementPct: number | null;
+  previousGrossMargin: number;
   grossMargin: number;
   grossMarginPct: number | null;
 };
@@ -194,12 +195,14 @@ function buildMetricRows(rows: BudgetVsAccountingSummary["rows"]) {
         previousReal: 0,
         currentBudget: 0,
         currentReal: 0,
+        previousGrossMargin: 0,
         grossMargin: 0,
       };
 
     current.previousReal += row.previousReal;
     current.currentBudget += row.currentBudget;
     current.currentReal += row.currentReal;
+    current.previousGrossMargin += row.previousGrossMargin;
     current.grossMargin += row.grossMargin;
     grouped.set(row.negocio, current);
   }
@@ -231,12 +234,14 @@ function buildLineMetricRows(rows: BudgetVsAccountingSummary["rows"]) {
         previousReal: 0,
         currentBudget: 0,
         currentReal: 0,
+        previousGrossMargin: 0,
         grossMargin: 0,
       };
 
     current.previousReal += row.previousReal;
     current.currentBudget += row.currentBudget;
     current.currentReal += row.currentReal;
+    current.previousGrossMargin += row.previousGrossMargin;
     current.grossMargin += row.grossMargin;
     grouped.set(key, current);
   }
@@ -253,6 +258,70 @@ function buildLineMetricRows(rows: BudgetVsAccountingSummary["rows"]) {
       };
     })
     .sort((a, b) => a.negocio.localeCompare(b.negocio, "es") || b.currentReal - a.currentReal);
+}
+
+function buildLineMonthlyMarginRows({
+  rows,
+  periodos,
+}: {
+  rows: BudgetVsAccountingSummary["rows"];
+  periodos: string[];
+}) {
+  const grouped = new Map<
+    string,
+    {
+      negocio: string;
+      linea: string;
+      totalReal: number;
+      totalPreviousMargin: number;
+      totalMargin: number;
+      months: Map<string, { real: number; previousMargin: number; margin: number }>;
+    }
+  >();
+
+  for (const row of rows) {
+    const key = `${row.negocio}::${row.linea}`;
+    const current =
+      grouped.get(key) ??
+      {
+        negocio: row.negocio,
+        linea: row.linea,
+        totalReal: 0,
+        totalPreviousMargin: 0,
+        totalMargin: 0,
+        months: new Map<string, { real: number; previousMargin: number; margin: number }>(),
+      };
+    const month = current.months.get(row.periodo) ?? { real: 0, previousMargin: 0, margin: 0 };
+
+    month.real += row.currentReal;
+    month.previousMargin += row.previousGrossMargin;
+    month.margin += row.grossMargin;
+    current.totalReal += row.currentReal;
+    current.totalPreviousMargin += row.previousGrossMargin;
+    current.totalMargin += row.grossMargin;
+    current.months.set(row.periodo, month);
+    grouped.set(key, current);
+  }
+
+  return [...grouped.values()]
+    .map((row) => ({
+      ...row,
+      totalMarginPct: row.totalReal ? (row.totalMargin / row.totalReal) * 100 : null,
+    }))
+    .sort((a, b) => a.negocio.localeCompare(b.negocio, "es") || b.totalMargin - a.totalMargin)
+    .map((row) => ({
+      ...row,
+      monthValues: periodos.map((periodo) => {
+        const month = row.months.get(periodo) ?? { real: 0, previousMargin: 0, margin: 0 };
+        return {
+          periodo,
+          previousMargin: month.previousMargin,
+          margin: month.margin,
+          variation: month.margin - month.previousMargin,
+          marginPct: month.real ? (month.margin / month.real) * 100 : null,
+        };
+      }),
+    }));
 }
 
 function EmptyState() {
@@ -308,6 +377,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
           previousReal: metricRows.reduce((sum, row) => sum + row.previousReal, 0),
           currentBudget: metricRows.reduce((sum, row) => sum + row.currentBudget, 0),
           currentReal: metricRows.reduce((sum, row) => sum + row.currentReal, 0),
+          previousGrossMargin: metricRows.reduce((sum, row) => sum + row.previousGrossMargin, 0),
           grossMargin: metricRows.reduce((sum, row) => sum + row.grossMargin, 0),
         },
       ])[0],
@@ -331,6 +401,10 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
   const comparisonChartHeight = Math.max(520, comparisonChartRows.length * 46);
   const comparisonChartShowsLines = selectedNegocios.length > 0;
   const comparisonTableRows = comparisonChartShowsLines ? lineMetricRows : metricRows;
+  const lineMonthlyMarginRows = useMemo(
+    () => buildLineMonthlyMarginRows({ rows: filteredRows, periodos: activePeriodos }),
+    [activePeriodos, filteredRows],
+  );
   const periodLabel = activePeriodos.length === summary.periodos.length ? "Todos los meses" : activePeriodos.join(" - ");
   const handleNegociosChange = (values: string[]) => {
     setSelectedNegocios(values);
@@ -449,7 +523,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
               ) : null}
               {comparisonView === "table" && comparisonTableRows.length ? (
                 <div className="h-full overflow-auto rounded-2xl border border-slate-800">
-                  <table className="w-full min-w-[980px] text-left text-sm">
+                  <table className="w-full min-w-[1180px] text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-[0.16em] text-slate-500">
                       <tr>
                         <th className="px-5 py-4">Negocio</th>
@@ -458,7 +532,10 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                         <th className="px-5 py-4 text-right">{summary.currentYear} PPTO</th>
                         <th className="px-5 py-4 text-right">{summary.currentYear} real</th>
                         <th className="px-5 py-4 text-right">Variacion</th>
+                        <th className="px-5 py-4 text-right">% variacion</th>
                         <th className="px-5 py-4 text-right">% logro</th>
+                        <th className="px-5 py-4 text-right">MB</th>
+                        <th className="px-5 py-4 text-right">%MB</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
@@ -470,7 +547,10 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                           <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.currentBudget)}</td>
                           <td className="px-5 py-4 text-right font-semibold tabular-nums text-white">{formatNumber(row.currentReal)}</td>
                           <td className={`px-5 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(row.variation)}</td>
+                          <td className={`px-5 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatPercent(row.variationPct)}</td>
                           <td className="px-5 py-4 text-right font-semibold tabular-nums text-sky-300">{formatPercent(row.achievementPct)}</td>
+                          <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td>
+                          <td className="px-5 py-4 text-right tabular-nums">{formatPercent(row.grossMarginPct)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -505,6 +585,100 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
               ) : (
                 <EmptyState />
               )}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(380px,1fr)]">
+          <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">MB mensual por linea</h2>
+                <p className="mt-2 text-base text-slate-400">
+                  Evolucion de margen bruto por mes, comparando {summary.previousYear} y {summary.currentYear} con los mismos filtros.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 h-[520px] min-h-[520px] min-w-0">
+              <div className="h-full overflow-auto rounded-2xl border border-slate-800">
+                <table className="w-full min-w-[1440px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-5 py-4">Negocio</th>
+                      <th className="px-5 py-4">Linea</th>
+                      {activePeriodos.flatMap((periodo) => [
+                        <th key={`${periodo}-${summary.previousYear}`} className="px-5 py-4 text-right">{periodo} {summary.previousYear}</th>,
+                        <th key={`${periodo}-${summary.currentYear}`} className="px-5 py-4 text-right">{periodo} {summary.currentYear}</th>,
+                        <th key={`${periodo}-var`} className="px-5 py-4 text-right">{periodo} Var.</th>,
+                      ])}
+                      <th className="px-5 py-4 text-right">MB {summary.previousYear}</th>
+                      <th className="px-5 py-4 text-right">MB {summary.currentYear}</th>
+                      <th className="px-5 py-4 text-right">Variacion</th>
+                      <th className="px-5 py-4 text-right">%MB total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {lineMonthlyMarginRows.map((row) => (
+                      <tr key={`${row.negocio}-${row.linea}`} className="hover:bg-white/5">
+                        <td className="px-5 py-4 font-semibold text-white">{row.negocio}</td>
+                        <td className="px-5 py-4 text-slate-300">{row.linea}</td>
+                        {row.monthValues.flatMap((month) => [
+                          <td key={`${row.negocio}-${row.linea}-${month.periodo}-previous`} className="px-5 py-4 text-right tabular-nums text-slate-400">{formatNumber(month.previousMargin)}</td>,
+                          <td key={`${row.negocio}-${row.linea}-${month.periodo}-current`} className="px-5 py-4 text-right font-semibold tabular-nums text-white">{formatNumber(month.margin)}</td>,
+                          <td key={`${row.negocio}-${row.linea}-${month.periodo}-variation`} className={`px-5 py-4 text-right font-semibold tabular-nums ${month.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(month.variation)}</td>,
+                        ])}
+                        <td className="px-5 py-4 text-right tabular-nums text-slate-400">{formatNumber(row.totalPreviousMargin)}</td>
+                        <td className="px-5 py-4 text-right font-semibold tabular-nums text-white">{formatNumber(row.totalMargin)}</td>
+                        <td className={`px-5 py-4 text-right font-semibold tabular-nums ${row.totalMargin - row.totalPreviousMargin >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(row.totalMargin - row.totalPreviousMargin)}</td>
+                        <td className="px-5 py-4 text-right font-semibold tabular-nums text-lime-300">{formatPercent(row.totalMarginPct)}</td>
+                      </tr>
+                    ))}
+                    {!lineMonthlyMarginRows.length ? (
+                      <tr>
+                        <td colSpan={(activePeriodos.length * 3) + 6} className="px-5 py-10 text-center text-slate-500">
+                          No hay datos para los filtros actuales.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
+            <div className="border-b border-slate-800 px-6 py-5">
+              <h2 className="text-xl font-semibold text-white">Detalle MB</h2>
+              <p className="mt-1 text-sm text-slate-500">Ranking visible por {comparisonChartShowsLines ? "linea" : "negocio"}.</p>
+            </div>
+            <div className="max-h-[560px] overflow-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-[0.16em] text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4">{comparisonChartShowsLines ? "Linea" : "Negocio"}</th>
+                    <th className="px-5 py-4 text-right">MB {summary.previousYear}</th>
+                    <th className="px-5 py-4 text-right">MB {summary.currentYear}</th>
+                    <th className="px-5 py-4 text-right">%MB</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {comparisonTableRows.map((row) => (
+                    <tr key={`mb-${comparisonChartShowsLines ? `${row.negocio}-${(row as LineMetricRow).linea}` : row.negocio}`} className="hover:bg-white/5">
+                      <td className="px-5 py-4 font-semibold text-white">{comparisonChartShowsLines ? (row as LineMetricRow).linea : row.negocio}</td>
+                      <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.previousGrossMargin)}</td>
+                      <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td>
+                      <td className="px-5 py-4 text-right font-semibold tabular-nums text-lime-300">{formatPercent(row.grossMarginPct)}</td>
+                    </tr>
+                  ))}
+                  {!comparisonTableRows.length ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-slate-500">
+                        No hay datos para los filtros actuales.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

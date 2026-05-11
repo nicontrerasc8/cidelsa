@@ -49,6 +49,7 @@ export type BudgetVsAccountingRow = {
   previousReal: number;
   currentBudget: number;
   currentReal: number;
+  previousGrossMargin: number;
   grossMargin: number;
 };
 
@@ -580,6 +581,7 @@ function buildBudgetVsAccountingSummaryFromRows(
           previousReal: 0,
           currentBudget: 0,
           currentReal: 0,
+          previousGrossMargin: 0,
           grossMargin: 0,
         };
 
@@ -622,11 +624,12 @@ function buildBudgetVsAccountingSummaryFromRows(
         target.grossMargin += normalizeBudgetVsAccountingGrossMargin(row);
       } else {
         target.previousReal += accountingAmount;
+        target.previousGrossMargin += normalizeBudgetVsAccountingGrossMargin(row);
       }
     }
 
     const rows = [...rowsByKey.values()].filter(
-      (row) => row.previousReal || row.currentBudget || row.currentReal || row.grossMargin,
+      (row) => row.previousReal || row.currentBudget || row.currentReal || row.previousGrossMargin || row.grossMargin,
     );
 
     return {
