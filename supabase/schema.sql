@@ -40,6 +40,16 @@ begin
       select 1
       from pg_enum
       where enumtypid = 'public.app_role'::regtype
+        and enumlabel = 'jefe_area'
+    ) then
+    alter type public.app_role add value 'jefe_area';
+  end if;
+
+  if exists (select 1 from pg_type where typname = 'app_role')
+    and not exists (
+      select 1
+      from pg_enum
+      where enumtypid = 'public.app_role'::regtype
         and enumlabel = 'ejecutivo_ventas'
     ) then
     alter type public.app_role add value 'ejecutivo_ventas';
@@ -271,7 +281,7 @@ returns boolean
 language sql
 stable
 as $$
-  select coalesce(public.current_app_role() in ('administrador_comercial', 'gerente_comercial', 'directorio'), false)
+  select coalesce(public.current_app_role() in ('administrador_comercial', 'gerente_comercial', 'jefe_area', 'directorio'), false)
 $$;
 
 create or replace function public.can_upload_imports()
@@ -279,7 +289,7 @@ returns boolean
 language sql
 stable
 as $$
-  select coalesce(public.current_app_role() in ('administrador_comercial'), false)
+  select coalesce(public.current_app_role() in ('administrador_comercial', 'jefe_area'), false)
 $$;
 
 create or replace function public.has_fact_scope(

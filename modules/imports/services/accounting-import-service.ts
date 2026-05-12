@@ -3,6 +3,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 
 import { requireRoleAccess } from "@/lib/auth/authorization";
+import { canViewMargins } from "@/lib/auth/roles";
 import type { CurrentUser } from "@/lib/auth/session";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -785,7 +786,7 @@ export async function deleteAccountingImport(importId: string) {
 }
 
 export async function getAccountingImportDetail(importId: string) {
-  await requireRoleAccess([...importAccessRoles]);
+  const user = await requireRoleAccess([...importAccessRoles]);
 
   const supabase = await createServerSupabaseClient();
   const { data: importRow, error: importError } = await supabase
@@ -804,7 +805,18 @@ export async function getAccountingImportDetail(importId: string) {
 
   return {
     import: normalizeImportRecord(importRow as unknown as RecentAccountingImportRow),
-    rows: importData.rows.map(normalizeAccountingImportRow),
+    rows: importData.rows.map((row) => {
+      const normalized = normalizeAccountingImportRow(row);
+      return canViewMargins(user.role)
+        ? normalized
+        : {
+            ...normalized,
+            payload: {
+              ...normalized.payload,
+              mb: null,
+            },
+          };
+    }),
     audit: importData.audit,
   };
 }
@@ -813,7 +825,7 @@ export async function updateAccountingImportMetadata(
   importId: string,
   input: { anio: number },
 ) {
-  await requireRoleAccess([...importAccessRoles]);
+  const user = await requireRoleAccess([...importAccessRoles]);
 
   const parsed = updateImportSchema.parse({
     anio: input.anio,
@@ -849,7 +861,7 @@ export async function updateAccountingImportRow(
     periodo: string | null;
   },
 ) {
-  await requireRoleAccess([...importAccessRoles]);
+  const user = await requireRoleAccess([...importAccessRoles]);
 
   const parsed = updateAccountingRowSchema.parse({
     linea: normalizeOptionalText(input.linea),
@@ -877,7 +889,7 @@ export async function updateAccountingImportRow(
         anio_anterior_real: parsed.anio_anterior_real,
         anio_actual_ppto: parsed.anio_actual_ppto,
         anio_actual_real: parsed.anio_actual_real,
-        mb: parsed.mb,
+        mb: canViewMargins(user.role) ? parsed.mb : row.payload.mb ?? null,
         negocio: parsed.negocio,
         periodo_desde: parsed.periodo_desde,
         periodo_hasta: parsed.periodo_hasta,

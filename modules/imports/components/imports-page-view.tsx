@@ -390,6 +390,7 @@ function AccountingMonthlyPreviewTable({
   rows,
   groupSelections,
   onGroupChange,
+  canViewMargins,
 }: {
   title: AccountingSectionTitle;
   rows: Record<string, unknown>[];
@@ -399,8 +400,12 @@ function AccountingMonthlyPreviewTable({
     row: Record<string, unknown>,
     group: string,
   ) => void;
+  canViewMargins: boolean;
 }) {
   const groupOptions = ACCOUNTING_GROUP_OPTIONS_BY_SECTION[title];
+  const visibleColumns = canViewMargins
+    ? ACCOUNTING_MONTHLY_PREVIEW_COLUMNS
+    : ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.filter((column) => !column.key.endsWith("_margen_bruto"));
 
   return (
     <div className="space-y-3 rounded-3xl border border-slate-700/80 bg-slate-950/80 p-3 text-white shadow-sm">
@@ -420,7 +425,7 @@ function AccountingMonthlyPreviewTable({
                 <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap">
                   Grupo
                 </th>
-                {ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.map((column) => (
+                {visibleColumns.map((column) => (
                   <th
                     key={column.key}
                     className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap"
@@ -457,7 +462,7 @@ function AccountingMonthlyPreviewTable({
                       ))}
                     </select>
                   </td>
-                  {ACCOUNTING_MONTHLY_PREVIEW_COLUMNS.map((column) => (
+                  {visibleColumns.map((column) => (
                     <td
                       key={`${title}-${rowIndex}-${column.key}`}
                       className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap"
@@ -486,10 +491,16 @@ function AccountingMonthlyPreviewTable({
 function BudgetSectionPreviewTable({
   title,
   rows,
+  canViewMargins,
 }: {
   title: BudgetSectionTitle;
   rows: Record<string, unknown>[];
+  canViewMargins: boolean;
 }) {
+  const visibleColumns = canViewMargins
+    ? BUDGET_PREVIEW_COLUMNS
+    : BUDGET_PREVIEW_COLUMNS.filter((column) => !column.key.endsWith("_margen_bruto"));
+
   return (
     <div className="space-y-3 rounded-3xl border border-slate-700/80 bg-slate-950/80 p-3 text-white shadow-sm">
       <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
@@ -508,7 +519,7 @@ function BudgetSectionPreviewTable({
                 <th className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap">
                   Línea
                 </th>
-                {BUDGET_PREVIEW_COLUMNS.map((column) => (
+                {visibleColumns.map((column) => (
                   <th
                     key={column.key}
                     className="px-3 py-3 text-left text-[11px] uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap"
@@ -530,7 +541,7 @@ function BudgetSectionPreviewTable({
                     <td className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap">
                       {originalLine || <span className="text-slate-500">-</span>}
                     </td>
-                    {BUDGET_PREVIEW_COLUMNS.map((column) => (
+                    {visibleColumns.map((column) => (
                       <td
                         key={`${title}-${rowIndex}-${column.key}`}
                         className="px-3 py-3 text-xs leading-5 text-white align-top whitespace-nowrap"
@@ -568,6 +579,7 @@ function ImportUploadCard({
   showImportYear = true,
   businessOptions,
   periodOptions,
+  canViewMargins,
 }: {
   title: string;
   eyebrow: string;
@@ -581,6 +593,7 @@ function ImportUploadCard({
   showImportYear?: boolean;
   businessOptions?: ReadonlyArray<{ label: string; value: string }>;
   periodOptions?: ReadonlyArray<{ label: string; value: string }>;
+  canViewMargins: boolean;
 }) {
   const router = useRouter();
   const fileInputId = useId();
@@ -624,8 +637,14 @@ function ImportUploadCard({
       }
     }
 
-    return orderedColumns;
-  }, [preview]);
+    return canViewMargins
+      ? orderedColumns
+      : orderedColumns.filter(
+          (column) =>
+            !["costo_monto", "margen_monto", "porcentaje_num"].includes(column.key) &&
+            !column.key.endsWith("_margen_bruto"),
+        );
+  }, [canViewMargins, preview]);
 
   const totalPreviewPages = useMemo(() => {
     if (!preview?.previewRows.length) return 1;
@@ -1216,12 +1235,14 @@ function ImportUploadCard({
                 rows={comercialMonthlyPreviewRows}
                 groupSelections={accountingGroupSelections}
                 onGroupChange={handleAccountingGroupChange}
+                canViewMargins={canViewMargins}
               />
               <AccountingMonthlyPreviewTable
                 title="Industrial"
                 rows={industrialMonthlyPreviewRows}
                 groupSelections={accountingGroupSelections}
                 onGroupChange={handleAccountingGroupChange}
+                canViewMargins={canViewMargins}
               />
               <div className="flex flex-col gap-3 rounded-3xl border border-slate-700/80 bg-slate-950/70 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-slate-300">
@@ -1253,14 +1274,17 @@ function ImportUploadCard({
               <BudgetSectionPreviewTable
                 title="Arquitectura"
                 rows={architectureBudgetRows}
+                canViewMargins={canViewMargins}
               />
               <BudgetSectionPreviewTable
                 title="Comercial"
                 rows={commercialBudgetRows}
+                canViewMargins={canViewMargins}
               />
               <BudgetSectionPreviewTable
                 title="Industrial"
                 rows={industrialBudgetRows}
+                canViewMargins={canViewMargins}
               />
               <div className="flex flex-col gap-3 rounded-3xl border border-slate-700/80 bg-slate-950/70 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-slate-300">
@@ -1509,9 +1533,11 @@ function ImportHistoryCard({
 export function ImportsPageView({
   imports,
   accountingImports,
+  canViewMargins,
 }: {
   imports: ImportRecord[];
   accountingImports: ImportRecord[];
+  canViewMargins: boolean;
 }) {
   const [activeImportTab, setActiveImportTab] = useState("ax");
 
@@ -1563,6 +1589,7 @@ export function ImportsPageView({
             consoleLabel="[imports] Excel AX cargado"
             accentClassName="bg-[linear-gradient(90deg,#0b1f33_0%,#1f5c8c_100%)]"
             showImportYear={false}
+            canViewMargins={canViewMargins}
           />
           <ImportHistoryCard
             title="Historial reciente AX"
@@ -1583,6 +1610,7 @@ export function ImportsPageView({
             successMessage="Excel contable procesado correctamente."
             consoleLabel="[accounting-imports] Excel cargado"
             accentClassName="bg-[linear-gradient(90deg,#17456d_0%,#2d7f73_100%)]"
+            canViewMargins={canViewMargins}
           />
           <ImportHistoryCard
             title="Historial reciente contabilidad"

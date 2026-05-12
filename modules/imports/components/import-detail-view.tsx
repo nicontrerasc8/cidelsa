@@ -140,10 +140,12 @@ export function ImportDetailView({
   importRecord,
   rows,
   audit,
+  canViewMargins,
 }: {
   importRecord: ImportRecord;
   rows: ImportFactRow[];
   audit: ImportAudit;
+  canViewMargins: boolean;
 }) {
   const router = useRouter();
   const [isSavingImport, startSavingImport] = useTransition();
@@ -230,6 +232,14 @@ export function ImportDetailView({
     try {
       setSavingRowId(rowId);
 
+      const marginPayload = canViewMargins
+        ? {
+            costo_monto: normalizeNumberInput(current.costo_monto),
+            margen_monto: normalizeNumberInput(current.margen_monto),
+            porcentaje_num: normalizeNumberInput(current.porcentaje_num),
+          }
+        : {};
+
       const response = await fetch(`/api/imports/${importRecord.id}/rows/${rowId}`, {
         method: "PATCH",
         headers: {
@@ -267,9 +277,7 @@ export function ImportDetailView({
           cantidad: normalizeNumberInput(current.cantidad),
           ventas_monto: normalizeNumberInput(current.ventas_monto),
           proyeccion_monto: normalizeNumberInput(current.proyeccion_monto),
-          costo_monto: normalizeNumberInput(current.costo_monto),
-          margen_monto: normalizeNumberInput(current.margen_monto),
-          porcentaje_num: normalizeNumberInput(current.porcentaje_num),
+          ...marginPayload,
           probabilidad_num: normalizeNumberInput(current.probabilidad_num),
           observaciones: current.observaciones || null,
         }),
@@ -590,15 +598,19 @@ export function ImportDetailView({
                   <Field label="Proyección">
                     <Input value={editable.proyeccion_monto} onChange={(e) => patchEditableRow(row.id, { proyeccion_monto: e.target.value })} />
                   </Field>
-                  <Field label="Costo">
-                    <Input value={editable.costo_monto} onChange={(e) => patchEditableRow(row.id, { costo_monto: e.target.value })} />
-                  </Field>
-                  <Field label="Margen">
-                    <Input value={editable.margen_monto} onChange={(e) => patchEditableRow(row.id, { margen_monto: e.target.value })} />
-                  </Field>
-                  <Field label="Porcentaje">
-                    <Input value={editable.porcentaje_num} onChange={(e) => patchEditableRow(row.id, { porcentaje_num: e.target.value })} />
-                  </Field>
+                  {canViewMargins ? (
+                    <>
+                      <Field label="Costo">
+                        <Input value={editable.costo_monto} onChange={(e) => patchEditableRow(row.id, { costo_monto: e.target.value })} />
+                      </Field>
+                      <Field label="Margen">
+                        <Input value={editable.margen_monto} onChange={(e) => patchEditableRow(row.id, { margen_monto: e.target.value })} />
+                      </Field>
+                      <Field label="Porcentaje">
+                        <Input value={editable.porcentaje_num} onChange={(e) => patchEditableRow(row.id, { porcentaje_num: e.target.value })} />
+                      </Field>
+                    </>
+                  ) : null}
                   <Field label="Probabilidad %">
                     <Input value={editable.probabilidad_num} onChange={(e) => patchEditableRow(row.id, { probabilidad_num: e.target.value })} />
                   </Field>

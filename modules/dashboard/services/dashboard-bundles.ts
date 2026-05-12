@@ -1,8 +1,15 @@
 import "server-only";
 
+import { canViewMargins } from "@/lib/auth/roles";
+import type { AppRole } from "@/lib/types/database";
 import { getBillingByLineSummary } from "@/modules/dashboard/services/billing-by-line";
 import { getCurrentPortfolioSummary } from "@/modules/dashboard/services/current-portfolio";
-import { buildBudgetVsAccountingSummaryFromAccountingSummary, getAccountingDashboardSummary } from "@/modules/dashboard/services/financial-dashboards";
+import {
+  buildBudgetVsAccountingSummaryFromAccountingSummary,
+  getAccountingDashboardSummary,
+  type BudgetVsAccountingSummary,
+  type FinancialSummary,
+} from "@/modules/dashboard/services/financial-dashboards";
 import { getSalesByClientSummary } from "@/modules/dashboard/services/sales-by-client";
 import { getSalesByExecutiveSummary } from "@/modules/dashboard/services/sales-by-executive";
 import { getExecutiveBacklogMatrixSummary } from "@/modules/dashboard/services/executive-backlog-matrix";
@@ -14,7 +21,32 @@ import { getSellerDashboardSummary } from "@/modules/dashboard/services/seller-d
 export type ExecutiveDashboardBundle = Awaited<ReturnType<typeof getExecutiveDashboardBundle>>;
 export type SellerDashboardBundle = Awaited<ReturnType<typeof getSellerDashboardBundle>>;
 
-export async function getExecutiveDashboardBundle() {
+function hideFinancialMargins(summary: FinancialSummary): FinancialSummary {
+  return {
+    ...summary,
+    hasMarginAccess: false,
+    rows: summary.rows.map((row) => ({
+      ...row,
+      grossMargin: null,
+    })),
+  };
+}
+
+function hideBudgetVsAccountingMargins(
+  summary: BudgetVsAccountingSummary,
+): BudgetVsAccountingSummary {
+  return {
+    ...summary,
+    hasMarginAccess: false,
+    rows: summary.rows.map((row) => ({
+      ...row,
+      previousGrossMargin: 0,
+      grossMargin: 0,
+    })),
+  };
+}
+
+export async function getExecutiveDashboardBundle(role?: AppRole) {
   const [
     salesByClient,
     billingByLine,
@@ -28,15 +60,17 @@ export async function getExecutiveDashboardBundle() {
     getCurrentPortfolioSummary(),
     getAccountingDashboardSummary(),
   ]);
-  const budgetVsAccounting = buildBudgetVsAccountingSummaryFromAccountingSummary(accounting);
+  const canSeeMargins = role ? canViewMargins(role) : true;
+  const visibleAccounting = canSeeMargins ? accounting : hideFinancialMargins(accounting);
+  const budgetVsAccounting = buildBudgetVsAccountingSummaryFromAccountingSummary(visibleAccounting);
 
   return {
     salesByClient,
     billingByLine,
     salesByExecutive,
     currentPortfolio,
-    accounting,
-    budgetVsAccounting,
+    accounting: visibleAccounting,
+    budgetVsAccounting: canSeeMargins ? budgetVsAccounting : hideBudgetVsAccountingMargins(budgetVsAccounting),
   };
 }
 

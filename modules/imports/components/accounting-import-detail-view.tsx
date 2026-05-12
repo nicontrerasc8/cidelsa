@@ -82,10 +82,12 @@ export function AccountingImportDetailView({
   importRecord,
   rows,
   audit,
+  canViewMargins,
 }: {
   importRecord: ImportRecord;
   rows: AccountingImportRow[];
   audit: ImportAudit;
+  canViewMargins: boolean;
 }) {
   const router = useRouter();
   const [isSavingImport, startSavingImport] = useTransition();
@@ -185,6 +187,7 @@ export function AccountingImportDetailView({
 
     try {
       setSavingRowId(rowId);
+      const marginPayload = canViewMargins ? { mb: normalizeNumberInput(current.mb) } : {};
 
       const response = await fetch(`/api/accounting-imports/${importRecord.id}/rows/${rowId}`, {
         method: "PATCH",
@@ -196,7 +199,7 @@ export function AccountingImportDetailView({
           anio_anterior_real: normalizeNumberInput(current.anio_anterior_real),
           anio_actual_ppto: normalizeNumberInput(current.anio_actual_ppto),
           anio_actual_real: normalizeNumberInput(current.anio_actual_real),
-          mb: normalizeNumberInput(current.mb),
+          ...marginPayload,
           negocio: current.negocio || null,
           periodo_desde: current.periodo_desde || null,
           periodo_hasta: current.periodo_hasta || null,
@@ -400,7 +403,7 @@ export function AccountingImportDetailView({
                     <TableHeaderCell>Año anterior real</TableHeaderCell>
                     <TableHeaderCell>Año actual ppto</TableHeaderCell>
                     <TableHeaderCell>Año actual real</TableHeaderCell>
-                    <TableHeaderCell>MB</TableHeaderCell>
+                    {canViewMargins ? <TableHeaderCell>MB</TableHeaderCell> : null}
                     <TableHeaderCell>Negocio</TableHeaderCell>
                     <TableHeaderCell>Periodo desde</TableHeaderCell>
                     <TableHeaderCell>Periodo hasta</TableHeaderCell>
@@ -467,14 +470,16 @@ export function AccountingImportDetailView({
                             }
                           />
                         </TableCell>
-                        <TableCell>
-                          <Input
-                            value={editable.mb}
-                            onChange={(event) =>
-                              patchEditableRow(row.id, { mb: event.target.value })
-                            }
-                          />
-                        </TableCell>
+                        {canViewMargins ? (
+                          <TableCell>
+                            <Input
+                              value={editable.mb}
+                              onChange={(event) =>
+                                patchEditableRow(row.id, { mb: event.target.value })
+                              }
+                            />
+                          </TableCell>
+                        ) : null}
                         <TableCell>
                           <Input
                             value={editable.negocio}

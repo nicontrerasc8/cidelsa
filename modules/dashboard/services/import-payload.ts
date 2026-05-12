@@ -162,8 +162,17 @@ export function normalizeCommercialCategory(value: string | null) {
   return value;
 }
 
+export function normalizeLineLabel(value: unknown) {
+  const comparable = normalizeComparableText(value);
+  return comparable ? comparable.toLocaleUpperCase("es-PE") : null;
+}
+
+export function normalizeExecutiveLabel(value: unknown) {
+  return normalizeComparableText(value);
+}
+
 export function getPayloadEjecutivo(payload: Record<string, unknown>) {
-  return normalizeText(payload.ejecutivo);
+  return normalizeExecutiveLabel(payload.ejecutivo);
 }
 
 export function getPayloadPipeline(payload: Record<string, unknown>) {

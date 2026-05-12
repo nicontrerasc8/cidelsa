@@ -3,7 +3,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 
 import { requireRoleAccess } from "@/lib/auth/authorization";
-import { canManageImports, importManagerRoles } from "@/lib/auth/roles";
+import { canManageImports, canViewMargins, importManagerRoles } from "@/lib/auth/roles";
 import type { CurrentUser } from "@/lib/auth/session";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -295,6 +295,15 @@ function collectNormalizedRows(importId: string, data: ImportJsonPayload) {
     }));
 }
 
+function hideImportRowMargins(row: ImportFactRow): ImportFactRow {
+  return {
+    ...row,
+    costo_monto: null,
+    margen_monto: null,
+    porcentaje_num: null,
+  };
+}
+
 function buildPreviewRows(importId: string, data: ImportJsonPayload) {
   return data.rows.map((row) => ({
     fila_excel: row.row_number,
@@ -475,7 +484,7 @@ export async function listRecentImports() {
 }
 
 export async function getImportDetail(importId: string) {
-  await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
+  const user = await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
 
   const supabase = await createServerSupabaseClient();
   const { data: importRow, error: importError } = await supabase
@@ -494,7 +503,9 @@ export async function getImportDetail(importId: string) {
 
   return {
     import: normalizeImportRecord(importRow as unknown as RecentImportRow),
-    rows: collectNormalizedRows(importId, importData),
+    rows: canViewMargins(user.role)
+      ? collectNormalizedRows(importId, importData)
+      : collectNormalizedRows(importId, importData).map(hideImportRowMargins),
     audit: importData.audit,
   };
 }
@@ -503,7 +514,7 @@ export async function updateImportMetadata(
   importId: string,
   input: { anio: number },
 ) {
-  await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
+  const user = await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
   const parsed = updateImportSchema.parse(input);
 
   const admin = createAdminSupabaseClient();
@@ -619,7 +630,7 @@ export async function updateImportFactRow(
     observaciones: string | null;
   },
 ) {
-  await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
+  const user = await requireRoleAccess([...importAccessRoles] as ImportAccessRole[]);
 
   const parsed = updateFactRowSchema.parse({
     anio: input.anio,
@@ -665,6 +676,17 @@ export async function updateImportFactRow(
 
   const nextRows = importData.rows.map((row) => {
     if (row.row_number !== rowId) return row;
+    const protectedMarginFields = canViewMargins(user.role)
+      ? {
+          costo_monto: parsed.costo_monto,
+          margen_monto: parsed.margen_monto,
+          porcentaje_num: parsed.porcentaje_num,
+        }
+      : {
+          costo_monto: row.payload.costo_monto ?? null,
+          margen_monto: row.payload.margen_monto ?? null,
+          porcentaje_num: row.payload.porcentaje_num ?? null,
+        };
 
     return {
       ...row,
@@ -702,9 +724,7 @@ export async function updateImportFactRow(
         sublinea: parsed.sublinea_nombre,
         grupo: parsed.grupo_nombre,
         ejecutivo: parsed.ejecutivo_nombre,
-        costo_monto: parsed.costo_monto,
-        margen_monto: parsed.margen_monto,
-        porcentaje_num: parsed.porcentaje_num,
+        ...protectedMarginFields,
       },
     } satisfies ImportJsonRow;
   });

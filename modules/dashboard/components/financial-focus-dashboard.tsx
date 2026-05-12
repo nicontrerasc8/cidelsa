@@ -318,14 +318,16 @@ function ChartTooltip({
   );
 }
 
-function buildDashboardCopy(mode: DashboardMode, totals: Totals) {
+function buildDashboardCopy(mode: DashboardMode, totals: Totals, hasMarginAccess: boolean) {
   if (mode === "accounting-budget") {
     return {
       eyebrow: "Dashboard financiero",
       title: "Contabilidad",
       subtitle: "Vista mensual contable con estructura de presupuesto por año, periodo y categoría.",
-      chartTitle: "Contabilidad y MG por periodo",
-      chartSubtitle: "Ventas planificadas y margen bruto desde las cargas contables.",
+      chartTitle: hasMarginAccess ? "Contabilidad y MG por periodo" : "Contabilidad por periodo",
+      chartSubtitle: hasMarginAccess
+        ? "Ventas planificadas y margen bruto desde las cargas contables."
+        : "Ventas planificadas desde las cargas contables.",
       distributionTitle: "Participación por categoría",
       distributionSubtitle: "Distribución de ventas contables por grupo.",
       emptyLabel: "No hay datos contables para los filtros seleccionados.",
@@ -363,8 +365,10 @@ function buildDashboardCopy(mode: DashboardMode, totals: Totals) {
       eyebrow: "Dashboard financiero",
       title: "Contabilidad",
       subtitle: "Vista pura de contabilidad por año, periodo y categoría.",
-      chartTitle: "Ventas y margen por periodo",
-      chartSubtitle: "Facturación real y margen bruto desde contabilidad.",
+      chartTitle: hasMarginAccess ? "Ventas y margen por periodo" : "Ventas por periodo",
+      chartSubtitle: hasMarginAccess
+        ? "Facturación real y margen bruto desde contabilidad."
+        : "Facturación real desde contabilidad.",
       distributionTitle: "Participación por categoría",
       distributionSubtitle: "Distribución de facturación real por grupo.",
       emptyLabel: "No hay datos contables para los filtros seleccionados.",
@@ -402,8 +406,10 @@ function buildDashboardCopy(mode: DashboardMode, totals: Totals) {
       eyebrow: "Dashboard financiero",
       title: "Presupuestos",
       subtitle: "Vista mensual de presupuesto por año, periodo y categoría.",
-      chartTitle: "Presupuesto y MG por periodo",
-      chartSubtitle: "Ventas presupuestadas y margen bruto desde el nuevo Excel mensual.",
+      chartTitle: hasMarginAccess ? "Presupuesto y MG por periodo" : "Presupuesto por periodo",
+      chartSubtitle: hasMarginAccess
+        ? "Ventas presupuestadas y margen bruto desde el nuevo Excel mensual."
+        : "Ventas presupuestadas desde el nuevo Excel mensual.",
       distributionTitle: "Participación por categoría",
       distributionSubtitle: "Distribución de ventas presupuestadas por grupo.",
       emptyLabel: "No hay datos de presupuesto para los filtros seleccionados.",
@@ -504,8 +510,12 @@ export function FinancialFocusDashboard({
     [mode, rawFilteredRows],
   );
 
+  const hasMarginAccess = summary.hasMarginAccess;
   const totals = useMemo(() => buildTotals(filteredRows), [filteredRows]);
-  const copy = buildDashboardCopy(mode, totals);
+  const copy = buildDashboardCopy(mode, totals, hasMarginAccess);
+  const visibleKpis = hasMarginAccess
+    ? copy.kpis
+    : copy.kpis.filter((kpi) => !/margen|mg/i.test(`${kpi.title} ${kpi.subtitle}`));
   const isBudgetPresentation = mode === "budget" || mode === "accounting-budget";
 
   const metricRows = useMemo(
@@ -557,7 +567,7 @@ export function FinancialFocusDashboard({
     summary.grupos.map((grupo) => ({ label: grupo, value: grupo })),
   );
   const tableColSpan =
-    mode === "comparison" ? 7 : 5;
+    mode === "comparison" ? (hasMarginAccess ? 7 : 6) : hasMarginAccess ? 5 : 4;
 
   return (
     <div className="min-h-screen bg-[#05080f] text-slate-300">
@@ -591,7 +601,7 @@ export function FinancialFocusDashboard({
         </header>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {copy.kpis.map((kpi) => (
+          {visibleKpis.map((kpi) => (
             <KpiCard
               key={kpi.title}
               title={kpi.title}
@@ -634,15 +644,15 @@ export function FinancialFocusDashboard({
                     {mode === "accounting" ? (
                       <>
                         <Bar yAxisId="left" dataKey="actual" name="Real" fill="#38bdf8" radius={[8, 8, 0, 0]} />
-                        <Bar yAxisId="left" dataKey="grossMargin" name="Margen bruto" fill="#10b981" radius={[8, 8, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="marginPct" name="Margen %" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} />
+                        {hasMarginAccess ? <Bar yAxisId="left" dataKey="grossMargin" name="Margen bruto" fill="#10b981" radius={[8, 8, 0, 0]} /> : null}
+                        {hasMarginAccess ? <Line yAxisId="right" type="monotone" dataKey="marginPct" name="Margen %" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} /> : null}
                       </>
                     ) : null}
                     {isBudgetPresentation ? (
                       <>
                         <Bar yAxisId="left" dataKey="planned" name={mode === "accounting-budget" ? "Contabilidad" : "Presupuesto"} fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                        <Bar yAxisId="left" dataKey="grossMargin" name={mode === "accounting-budget" ? "MG contable" : "MG presupuestado"} fill="#10b981" radius={[8, 8, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="marginPct" name="MG %" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4 }} />
+                        {hasMarginAccess ? <Bar yAxisId="left" dataKey="grossMargin" name={mode === "accounting-budget" ? "MG contable" : "MG presupuestado"} fill="#10b981" radius={[8, 8, 0, 0]} /> : null}
+                        {hasMarginAccess ? <Line yAxisId="right" type="monotone" dataKey="marginPct" name="MG %" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4 }} /> : null}
                       </>
                     ) : null}
                     {mode === "comparison" ? (
@@ -728,8 +738,8 @@ export function FinancialFocusDashboard({
                     </th>
                   ) : null}
                   {!isBudgetPresentation ? <th className="px-6 py-4 text-right">Cierre previo</th> : null}
-                  <th className="px-6 py-4 text-right">Margen</th>
-                  {isBudgetPresentation ? <th className="px-6 py-4 text-right">MG %</th> : null}
+                  {hasMarginAccess ? <th className="px-6 py-4 text-right">Margen</th> : null}
+                  {isBudgetPresentation && hasMarginAccess ? <th className="px-6 py-4 text-right">MG %</th> : null}
                   {mode === "comparison" ? <th className="px-6 py-4 text-right">Cumplimiento</th> : null}
                   <th className="px-6 py-4 text-right">Líneas</th>
                 </tr>
@@ -754,10 +764,12 @@ export function FinancialFocusDashboard({
                           {formatFullCurrency(row.previous)}
                         </td>
                       ) : null}
-                      <td className="px-6 py-4 text-right text-slate-200">
-                        {formatFullCurrency(row.grossMargin)}
-                      </td>
-                      {isBudgetPresentation ? (
+                      {hasMarginAccess ? (
+                        <td className="px-6 py-4 text-right text-slate-200">
+                          {formatFullCurrency(row.grossMargin)}
+                        </td>
+                      ) : null}
+                      {isBudgetPresentation && hasMarginAccess ? (
                         <td className="px-6 py-4 text-right text-slate-200">
                           {formatPercent(row.marginPct)}
                         </td>

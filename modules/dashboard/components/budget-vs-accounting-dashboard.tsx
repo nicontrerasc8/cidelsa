@@ -337,6 +337,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
   const [selectedLineas, setSelectedLineas] = useState<string[]>([]);
   const [selectedPeriodos, setSelectedPeriodos] = useState<string[]>(summary.periodos.slice(0, 2));
   const [comparisonView, setComparisonView] = useState<"chart" | "table">("table");
+  const hasMarginAccess = summary.hasMarginAccess;
 
   const activePeriodos = selectedPeriodos.length ? selectedPeriodos : summary.periodos;
   const lineOptions = useMemo(() => {
@@ -444,7 +445,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
           <KpiCard title={`${summary.previousYear} real`} value={formatCurrency(totalRow?.previousReal)} subtitle={periodLabel} icon={<WalletCards className="size-5" />} />
           <KpiCard title={`${summary.currentYear} PPTO`} value={formatCurrency(totalRow?.currentBudget)} subtitle="Presupuesto visible" icon={<Goal className="size-5" />} />
           <KpiCard title={`${summary.currentYear} real`} value={formatCurrency(totalRow?.currentReal)} subtitle="Contabilidad visible" icon={<TrendingUp className="size-5" />} />
-          <KpiCard title="% logro PPTO" value={formatPercent(totalRow?.achievementPct)} subtitle={`MB ${formatPercent(totalRow?.grossMarginPct)}`} icon={<Scale className="size-5" />} />
+          <KpiCard title="% logro PPTO" value={formatPercent(totalRow?.achievementPct)} subtitle={periodLabel} icon={<Scale className="size-5" />} />
         </section>
 
         <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4">
@@ -466,7 +467,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
           </div>
         </section>
 
-        <section className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(380px,1fr)]">
+        <section className={`grid min-w-0 grid-cols-1 gap-8 ${hasMarginAccess ? "xl:grid-cols-[minmax(0,2fr)_minmax(380px,1fr)]" : ""}`}>
           <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
               <div>
@@ -534,8 +535,8 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                         <th className="px-5 py-4 text-right">Variacion</th>
                         <th className="px-5 py-4 text-right">% variacion</th>
                         <th className="px-5 py-4 text-right">% logro</th>
-                        <th className="px-5 py-4 text-right">MB</th>
-                        <th className="px-5 py-4 text-right">%MB</th>
+                        {hasMarginAccess ? <th className="px-5 py-4 text-right">MB</th> : null}
+                        {hasMarginAccess ? <th className="px-5 py-4 text-right">%MB</th> : null}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
@@ -549,8 +550,8 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                           <td className={`px-5 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(row.variation)}</td>
                           <td className={`px-5 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatPercent(row.variationPct)}</td>
                           <td className="px-5 py-4 text-right font-semibold tabular-nums text-sky-300">{formatPercent(row.achievementPct)}</td>
-                          <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td>
-                          <td className="px-5 py-4 text-right tabular-nums">{formatPercent(row.grossMarginPct)}</td>
+                          {hasMarginAccess ? <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td> : null}
+                          {hasMarginAccess ? <td className="px-5 py-4 text-right tabular-nums">{formatPercent(row.grossMarginPct)}</td> : null}
                         </tr>
                       ))}
                     </tbody>
@@ -563,7 +564,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
             </div>
           </div>
 
-          <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
+          {hasMarginAccess ? <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
             <h2 className="text-xl font-semibold text-white">Logro y margen</h2>
             <p className="mt-1 text-sm text-slate-500">% logro PPTO y %MB por negocio.</p>
             <div className="mt-6 h-[520px] min-h-[520px] min-w-0">
@@ -586,10 +587,10 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                 <EmptyState />
               )}
             </div>
-          </div>
+          </div> : null}
         </section>
 
-        <section className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(380px,1fr)]">
+        {hasMarginAccess ? <section className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(380px,1fr)]">
           <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
               <div>
@@ -681,7 +682,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
               </table>
             </div>
           </div>
-        </section>
+        </section> : null}
 
         <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
           <div className="flex items-center gap-3 border-b border-slate-800 px-6 py-5">
@@ -702,8 +703,8 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                   <th className="px-6 py-4 text-right">Variacion imp.</th>
                   <th className="px-6 py-4 text-right">% variacion</th>
                   <th className="px-6 py-4 text-right">% logro PPTO</th>
-                  <th className="px-6 py-4 text-right">MB</th>
-                  <th className="px-6 py-4 text-right">%MB</th>
+                  {hasMarginAccess ? <th className="px-6 py-4 text-right">MB</th> : null}
+                  {hasMarginAccess ? <th className="px-6 py-4 text-right">%MB</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -716,8 +717,8 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                     <td className={`px-6 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(row.variation)}</td>
                     <td className={`px-6 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatPercent(row.variationPct)}</td>
                     <td className="px-6 py-4 text-right font-semibold tabular-nums text-sky-300">{formatPercent(row.achievementPct)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatPercent(row.grossMarginPct)}</td>
+                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td> : null}
+                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatPercent(row.grossMarginPct)}</td> : null}
                   </tr>
                 ))}
                 {totalRow ? (
@@ -729,13 +730,13 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                     <td className={`px-6 py-4 text-right tabular-nums ${totalRow.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(totalRow.variation)}</td>
                     <td className={`px-6 py-4 text-right tabular-nums ${totalRow.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatPercent(totalRow.variationPct)}</td>
                     <td className="px-6 py-4 text-right tabular-nums text-sky-300">{formatPercent(totalRow.achievementPct)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatNumber(totalRow.grossMargin)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatPercent(totalRow.grossMarginPct)}</td>
+                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatNumber(totalRow.grossMargin)}</td> : null}
+                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatPercent(totalRow.grossMarginPct)}</td> : null}
                   </tr>
                 ) : null}
                 {!metricRows.length ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-10 text-center text-slate-500">
+                    <td colSpan={hasMarginAccess ? 9 : 7} className="px-6 py-10 text-center text-slate-500">
                       No hay datos para los filtros actuales.
                     </td>
                   </tr>

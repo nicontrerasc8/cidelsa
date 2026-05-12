@@ -43,7 +43,7 @@ export default async function DashboardPage({
   }
 
   if (canAccessExecutiveDashboards(user.role)) {
-    const bundle = await getExecutiveDashboardBundle();
+    const bundle = await getExecutiveDashboardBundle(user.role);
     return <ExecutiveDashboardTabsView bundle={bundle} initialTab={initialTab} />;
   }
 

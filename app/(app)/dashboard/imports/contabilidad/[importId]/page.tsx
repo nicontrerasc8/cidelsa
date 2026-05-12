@@ -2,6 +2,7 @@ import Link from "next/link";
 import { forbidden } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { canViewMargins } from "@/lib/auth/roles";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AccountingImportDetailView } from "@/modules/imports/components/accounting-import-detail-view";
 import {
@@ -37,7 +38,12 @@ export default async function AccountingImportDetailPage(
         </Link>
       </div>
 
-      <AccountingImportDetailView importRecord={detail.import} rows={detail.rows} audit={detail.audit} />
+      <AccountingImportDetailView
+        importRecord={detail.import}
+        rows={detail.rows}
+        audit={detail.audit}
+        canViewMargins={canViewMargins(user.role)}
+      />
     </div>
   );
 }

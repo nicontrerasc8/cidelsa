@@ -38,6 +38,7 @@ export type FinancialSummary<T extends FinancialMetricRow = FinancialMetricRow> 
   periodos: string[];
   lineas: string[];
   rows: T[];
+  hasMarginAccess: boolean;
 };
 
 export type BudgetVsAccountingRow = {
@@ -60,6 +61,7 @@ export type BudgetVsAccountingSummary = {
   lineas: string[];
   periodos: string[];
   rows: BudgetVsAccountingRow[];
+  hasMarginAccess: boolean;
 };
 
 const MONTHLY_ACCOUNTING_FIELDS = [
@@ -252,6 +254,7 @@ function buildSummary<T extends FinancialMetricRow>(rows: T[]): FinancialSummary
     periodos: [...periodoSet],
     lineas: [...lineaSet].sort((a, b) => a.localeCompare(b)),
     rows,
+    hasMarginAccess: true,
   };
 }
 
@@ -550,6 +553,7 @@ function buildBudgetVsAccountingSummaryFromRows(
         lineas: [],
         periodos: [...MONTHLY_ACCOUNTING_FIELDS.map((field) => field.periodo)],
         rows: [],
+        hasMarginAccess: true,
       };
     }
 
@@ -639,6 +643,7 @@ function buildBudgetVsAccountingSummaryFromRows(
       lineas: [...lineLabels.values()].sort((a, b) => a.localeCompare(b, "es")),
       periodos: [...MONTHLY_ACCOUNTING_FIELDS.map((field) => field.periodo)],
       rows,
+      hasMarginAccess: true,
     };
 }
 

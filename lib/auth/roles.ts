@@ -2,6 +2,7 @@ import type { AppRole } from "@/lib/types/database";
 
 export const importManagerRoles = [
   "administrador_comercial",
+  "jefe_area",
 ] as const satisfies AppRole[];
 
 export const executiveDashboardRoles = [
@@ -18,8 +19,6 @@ export const sellerDashboardRoles = [
 export const roleLabels: Record<AppRole, string> = {
   administrador_comercial: "Administrador Comercial",
   gerente_comercial: "Gerente Comercial",
-
-  
   jefe_area: "Jefe de Area / Linea",
   ejecutivo_ventas: "Ejecutivo de Ventas",
   directorio: "Directorio",
@@ -35,6 +34,10 @@ export function canAccessExecutiveDashboards(role: AppRole) {
 
 export function canAccessSellerDashboard(role: AppRole) {
   return (sellerDashboardRoles as readonly AppRole[]).includes(role);
+}
+
+export function canViewMargins(role: AppRole) {
+  return role !== "jefe_area";
 }
 
 export function getDefaultDashboardPath(role: AppRole) {

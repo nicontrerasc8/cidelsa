@@ -1,6 +1,7 @@
 import { forbidden } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { canViewMargins } from "@/lib/auth/roles";
 import { ImportsPageView } from "@/modules/imports/components/imports-page-view";
 import { listRecentAccountingImports } from "@/modules/imports/services/accounting-import-service";
 import { canAccessImports, listRecentImports } from "@/modules/imports/services/import-service";
@@ -21,6 +22,7 @@ export default async function ImportsPage() {
     <ImportsPageView
       imports={imports}
       accountingImports={accountingImports}
+      canViewMargins={canViewMargins(user.role)}
     />
   );
 }
