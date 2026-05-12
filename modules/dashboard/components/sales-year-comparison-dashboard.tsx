@@ -6,6 +6,7 @@ import {
   Bar,
   CartesianGrid,
   ComposedChart,
+  LabelList,
   Line,
   ResponsiveContainer,
   Tooltip,
@@ -376,7 +377,7 @@ export function SalesYearComparisonDashboard({
             <div className="mt-6 h-[430px]">
               {yearlyComparison.length ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={yearlyComparison} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+                  <ComposedChart data={yearlyComparison} margin={{ top: 44, right: 12, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="salesYearArea" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.35} />
@@ -393,7 +394,15 @@ export function SalesYearComparisonDashboard({
                     <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.72)", fontSize: 12 }} tickFormatter={(value) => formatCurrency(Number(value))} />
                     <Tooltip content={<CustomTooltip />} />
                     <Area yAxisId="left" type="monotone" dataKey="ventasMonto" name="Ventas" stroke="#38bdf8" fill="url(#salesYearArea)" strokeWidth={2} />
-                    <Bar yAxisId="left" dataKey="ventasMonto" name="Ventas" fill="url(#salesYearBars)" radius={[12, 12, 0, 0]} maxBarSize={70} />
+                    <Bar yAxisId="left" dataKey="ventasMonto" name="Ventas" fill="url(#salesYearBars)" radius={[12, 12, 0, 0]} maxBarSize={70}>
+                      <LabelList
+                        position="top"
+                        formatter={(value) => formatCurrency(Number(value))}
+                        fill="#f8fafc"
+                        fontSize={12}
+                        fontWeight={800}
+                      />
+                    </Bar>
                     <Line yAxisId="right" type="monotone" dataKey="avgTicket" name="Ticket promedio" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: "#f59e0b" }} />
                   </ComposedChart>
                 </ResponsiveContainer>
