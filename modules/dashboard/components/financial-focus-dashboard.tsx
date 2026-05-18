@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
+  LabelList,
   Line,
   Pie,
   PieChart,
@@ -75,6 +76,21 @@ type MetricRow = {
   achievement: number | null;
   marginPct: number | null;
 };
+type LineLabelProps = {
+  x?: number | string;
+  y?: number | string;
+  index?: number;
+  value?: number | string;
+  fill?: string;
+  labelCount?: number;
+};
+type BarLabelProps = {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  height?: number | string;
+  value?: number | string;
+};
 
 function formatCompactCurrency(value: number | null | undefined) {
   return new Intl.NumberFormat("es-PE", {
@@ -97,6 +113,122 @@ function formatFullCurrency(value: number | null | undefined) {
 function formatPercent(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
   return `${value.toFixed(1)}%`;
+}
+
+function formatChartCurrencyLabel(value: unknown) {
+  if (typeof value !== "number" || value === 0) return "";
+
+  const absValue = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  if (absValue >= 1_000_000) {
+    const millions = new Intl.NumberFormat("es-ES", {
+      maximumFractionDigits: 3,
+    }).format(absValue / 1_000_000);
+
+    return `${sign}S/\u00a0${millions}\u00a0M`;
+  }
+
+  return formatCompactCurrency(value);
+}
+
+function formatChartPercentLabel(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? formatPercent(value) : "";
+}
+
+function AdaptiveLineLabel({
+  x,
+  y,
+  index = 0,
+  value,
+  fill = "#7dd3fc",
+  labelCount = 0,
+}: LineLabelProps) {
+  const label = formatChartPercentLabel(value);
+  const labelX = Number(x);
+  const labelY = Number(y);
+
+  if (!label || !Number.isFinite(labelX) || !Number.isFinite(labelY)) return null;
+
+  const isFirst = index === 0;
+  const isLast = labelCount > 0 && index === labelCount - 1;
+  const putBelow = labelY < 34 || index % 2 === 1;
+  const textX = labelX + (isLast ? -8 : isFirst || index % 2 === 0 ? 8 : -8);
+  const textY = labelY + (putBelow ? 18 : -12);
+  const textAnchor = isLast || (!isFirst && index % 2 === 1) ? "end" : "start";
+  const backgroundWidth = Math.max(38, label.length * 7.4);
+  const backgroundX =
+    textAnchor === "end" ? textX - backgroundWidth - 4 : textX - 4;
+
+  return (
+    <g>
+      <rect
+        x={backgroundX}
+        y={textY - 13}
+        width={backgroundWidth}
+        height={18}
+        rx={7}
+        fill="#05080f"
+        opacity={0.82}
+      />
+      <text
+        x={textX}
+        y={textY}
+        textAnchor={textAnchor}
+        fill={fill}
+        fontSize={12}
+        fontWeight={800}
+      >
+        {label}
+      </text>
+    </g>
+  );
+}
+
+function BarValueLabel({ x, y, width, height, value }: BarLabelProps) {
+  const label = formatChartCurrencyLabel(value);
+  const labelX = Number(x);
+  const labelY = Number(y);
+  const labelWidth = Number(width);
+  const labelHeight = Number(height);
+
+  if (
+    !label ||
+    !Number.isFinite(labelX) ||
+    !Number.isFinite(labelY) ||
+    !Number.isFinite(labelWidth) ||
+    !Number.isFinite(labelHeight)
+  ) {
+    return null;
+  }
+
+  const centerX = labelX + labelWidth / 2;
+  const centerY = labelY + labelHeight / 2;
+  const backgroundWidth = Math.max(54, label.length * 7.2);
+
+  return (
+    <g>
+      <rect
+        x={centerX - backgroundWidth / 2}
+        y={centerY - 11}
+        width={backgroundWidth}
+        height={22}
+        rx={8}
+        fill="#05080f"
+        opacity={0.72}
+      />
+      <text
+        x={centerX}
+        y={centerY + 4}
+        textAnchor="middle"
+        fill="#f8fafc"
+        fontSize={12}
+        fontWeight={800}
+      >
+        {label}
+      </text>
+    </g>
+  );
 }
 
 function sortPeriodNames(a: string, b: string) {
@@ -264,6 +396,63 @@ function SelectFilter({
         </option>
       ))}
     </select>
+  );
+}
+
+function MultiSelectFilter({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}) {
+  function toggle(value: string) {
+    onChange(
+      selected.includes(value)
+        ? selected.filter((item) => item !== value)
+        : [...selected, value],
+    );
+  }
+
+  return (
+    <div className="min-w-[260px] rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+          {label}
+        </p>
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="text-xs font-semibold text-sky-400 hover:text-sky-300"
+        >
+          Todos
+        </button>
+      </div>
+      <div className="flex max-h-28 flex-wrap gap-2 overflow-auto pr-1">
+        {options.map((option) => {
+          const active = selected.includes(option);
+
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => toggle(option)}
+              className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                active
+                  ? "border-sky-400 bg-sky-500 text-white"
+                  : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500"
+              }`}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -488,26 +677,37 @@ export function FinancialFocusDashboard({
   summary: FinancialSummary;
 }) {
   const [selectedYear, setSelectedYear] = useState(ALL_VALUE);
-  const [selectedPeriod, setSelectedPeriod] = useState(ALL_VALUE);
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [selectedNegocio, setSelectedNegocio] = useState(ALL_VALUE);
   const [selectedGroup, setSelectedGroup] = useState(ALL_VALUE);
 
   const selectedYearNumber = selectedYear === ALL_VALUE ? null : Number(selectedYear);
 
-  const rawFilteredRows = useMemo(
+  const periodFilteredRows = useMemo(
     () =>
       summary.rows.filter((row) => {
         if (selectedYearNumber !== null && row.importYear !== selectedYearNumber) return false;
-        if (selectedPeriod !== ALL_VALUE && row.periodo !== selectedPeriod) return false;
+        if (selectedPeriods.length > 0 && !selectedPeriods.includes(row.periodo)) return false;
+        return true;
+      }),
+    [selectedPeriods, selectedYearNumber, summary.rows],
+  );
+  const rawFilteredRows = useMemo(
+    () =>
+      periodFilteredRows.filter((row) => {
         if (selectedNegocio !== ALL_VALUE && row.negocio !== selectedNegocio) return false;
         if (selectedGroup !== ALL_VALUE && row.grupo !== selectedGroup) return false;
         return true;
       }),
-    [selectedGroup, selectedNegocio, selectedPeriod, selectedYearNumber, summary.rows],
+    [periodFilteredRows, selectedGroup, selectedNegocio],
   );
   const filteredRows = useMemo(
     () => normalizeDisplayRows(mode, rawFilteredRows),
     [mode, rawFilteredRows],
+  );
+  const periodDisplayRows = useMemo(
+    () => normalizeDisplayRows(mode, periodFilteredRows),
+    [mode, periodFilteredRows],
   );
 
   const hasMarginAccess = summary.hasMarginAccess;
@@ -542,7 +742,15 @@ export function FinancialFocusDashboard({
   }, [filteredRows, selectedYearNumber]);
 
   const chartRows = mode === "comparison" ? metricRows.slice(0, 12) : evolutionRows;
-  const distributionRows = metricRows
+  const distributionMetricRows = useMemo(
+    () =>
+      buildMetricRows(periodDisplayRows, (row) => row.grupo).sort((a, b) => {
+        if (isBudgetPresentation) return b.planned - a.planned;
+        return b.actual - a.actual;
+      }),
+    [isBudgetPresentation, periodDisplayRows],
+  );
+  const distributionRows = distributionMetricRows
     .map((row) => ({
       name: row.name,
       value:
@@ -556,9 +764,6 @@ export function FinancialFocusDashboard({
 
   const yearOptions = [{ label: "Historico", value: ALL_VALUE }].concat(
     summary.years.map((year) => ({ label: String(year), value: String(year) })),
-  );
-  const periodOptions = [{ label: "Todos los periodos", value: ALL_VALUE }].concat(
-    summary.periodos.map((periodo) => ({ label: periodo, value: periodo })),
   );
   const negocioOptions = [{ label: "Todos los negocios", value: ALL_VALUE }].concat(
     summary.negocios.map((negocio) => ({ label: negocio, value: negocio })),
@@ -594,7 +799,12 @@ export function FinancialFocusDashboard({
               </span>
             </div>
             <SelectFilter label="Año" value={selectedYear} onChange={setSelectedYear} options={yearOptions} />
-            <SelectFilter label="Periodo" value={selectedPeriod} onChange={setSelectedPeriod} options={periodOptions} />
+            <MultiSelectFilter
+              label="Periodos"
+              options={summary.periodos}
+              selected={selectedPeriods}
+              onChange={setSelectedPeriods}
+            />
             <SelectFilter label="Negocio" value={selectedNegocio} onChange={setSelectedNegocio} options={negocioOptions} />
             <SelectFilter label="Categoria" value={selectedGroup} onChange={setSelectedGroup} options={groupOptions} />
           </div>
@@ -612,7 +822,7 @@ export function FinancialFocusDashboard({
           ))}
         </div>
 
-        <div className="mt-8 grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <div className="mt-8 grid min-w-0 grid-cols-1 gap-8">
           <Surface className="p-6">
             <h2 className="text-xl font-semibold text-white">{copy.chartTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{copy.chartSubtitle}</p>
@@ -620,7 +830,7 @@ export function FinancialFocusDashboard({
             <div className="mt-6 h-[420px] min-h-[420px] min-w-0">
               {chartRows.length ? (
                 <ResponsiveContainer width="100%" height={420} minWidth={0}>
-                  <ComposedChart data={chartRows}>
+                  <ComposedChart data={chartRows} margin={{ top: 52, right: 16, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis dataKey="name" stroke="#64748b" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                     <YAxis
@@ -643,23 +853,49 @@ export function FinancialFocusDashboard({
                     <Tooltip content={<ChartTooltip />} />
                     {mode === "accounting" ? (
                       <>
-                        <Bar yAxisId="left" dataKey="actual" name="Real" fill="#38bdf8" radius={[8, 8, 0, 0]} />
-                        {hasMarginAccess ? <Bar yAxisId="left" dataKey="grossMargin" name="Margen bruto" fill="#10b981" radius={[8, 8, 0, 0]} /> : null}
-                        {hasMarginAccess ? <Line yAxisId="right" type="monotone" dataKey="marginPct" name="Margen %" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} /> : null}
+                        <Bar yAxisId="left" dataKey="actual" name="Real" fill="#38bdf8" radius={[8, 8, 0, 0]} barSize={56}>
+                          <LabelList dataKey="actual" content={<BarValueLabel />} />
+                        </Bar>
+                        {hasMarginAccess ? (
+                          <Bar yAxisId="left" dataKey="grossMargin" name="Margen bruto" fill="#10b981" radius={[8, 8, 0, 0]} barSize={56}>
+                            <LabelList dataKey="grossMargin" content={<BarValueLabel />} />
+                          </Bar>
+                        ) : null}
+                        {hasMarginAccess ? (
+                          <Line yAxisId="right" type="monotone" dataKey="marginPct" name="Margen %" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }}>
+                            <LabelList dataKey="marginPct" content={<AdaptiveLineLabel fill="#fbbf24" labelCount={chartRows.length} />} />
+                          </Line>
+                        ) : null}
                       </>
                     ) : null}
                     {isBudgetPresentation ? (
                       <>
-                        <Bar yAxisId="left" dataKey="planned" name={mode === "accounting-budget" ? "Contabilidad" : "Presupuesto"} fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                        {hasMarginAccess ? <Bar yAxisId="left" dataKey="grossMargin" name={mode === "accounting-budget" ? "MG contable" : "MG presupuestado"} fill="#10b981" radius={[8, 8, 0, 0]} /> : null}
-                        {hasMarginAccess ? <Line yAxisId="right" type="monotone" dataKey="marginPct" name="MG %" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4 }} /> : null}
+                        <Bar yAxisId="left" dataKey="planned" name={mode === "accounting-budget" ? "Contabilidad" : "Presupuesto"} fill="#f59e0b" radius={[8, 8, 0, 0]} barSize={56}>
+                          <LabelList dataKey="planned" content={<BarValueLabel />} />
+                        </Bar>
+                        {hasMarginAccess ? (
+                          <Bar yAxisId="left" dataKey="grossMargin" name={mode === "accounting-budget" ? "MG contable" : "MG presupuestado"} fill="#10b981" radius={[8, 8, 0, 0]} barSize={56}>
+                            <LabelList dataKey="grossMargin" content={<BarValueLabel />} />
+                          </Bar>
+                        ) : null}
+                        {hasMarginAccess ? (
+                          <Line yAxisId="right" type="monotone" dataKey="marginPct" name="MG %" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4 }}>
+                            <LabelList dataKey="marginPct" content={<AdaptiveLineLabel fill="#7dd3fc" labelCount={chartRows.length} />} />
+                          </Line>
+                        ) : null}
                       </>
                     ) : null}
                     {mode === "comparison" ? (
                       <>
-                        <Bar yAxisId="left" dataKey="actual" name="Real" fill="#38bdf8" radius={[8, 8, 0, 0]} />
-                        <Bar yAxisId="left" dataKey="planned" name="Presupuesto" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="achievement" name="Cumplimiento %" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
+                        <Bar yAxisId="left" dataKey="actual" name="Real" fill="#38bdf8" radius={[8, 8, 0, 0]} barSize={56}>
+                          <LabelList dataKey="actual" content={<BarValueLabel />} />
+                        </Bar>
+                        <Bar yAxisId="left" dataKey="planned" name="Presupuesto" fill="#f59e0b" radius={[8, 8, 0, 0]} barSize={56}>
+                          <LabelList dataKey="planned" content={<BarValueLabel />} />
+                        </Bar>
+                        <Line yAxisId="right" type="monotone" dataKey="achievement" name="Cumplimiento %" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }}>
+                          <LabelList dataKey="achievement" content={<AdaptiveLineLabel fill="#86efac" labelCount={chartRows.length} />} />
+                        </Line>
                       </>
                     ) : null}
                   </ComposedChart>

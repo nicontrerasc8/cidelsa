@@ -616,7 +616,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                       <th className="px-6 py-4">Linea</th>
                       <th className="px-6 py-4">Negocio</th>
                       <th className="px-6 py-4 text-right">Ventas</th>
-                      <th className="px-6 py-4 text-right">Operaciones</th>
+               
                       <th className="px-6 py-4 text-right">% cartera</th>
                     </tr>
                   </thead>
@@ -628,7 +628,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                           <td className="px-6 py-4">{row.linea}</td>
                           <td className="px-6 py-4">{row.negocio}</td>
                           <td className="px-6 py-4 text-right font-semibold text-white">{formatCurrency(row.ventasMonto)}</td>
-                          <td className="px-6 py-4 text-right tabular-nums">{row.operaciones}</td>
+                       
                           <td className="px-6 py-4 text-right tabular-nums">{formatPercent(row.salesShare)}</td>
                         </tr>
                       ))

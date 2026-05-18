@@ -8,6 +8,7 @@ import { isBillingSituation } from "@/modules/dashboard/services/import-payload"
 
 export type SalesByClientRow = {
   importYear: number | null;
+  monthIndex: number | null;
   cliente: string;
   negocio: string | null;
   linea: string | null;
@@ -42,6 +43,7 @@ async function loadSalesByClientSummary(): Promise<SalesByClientSummary> {
 
     rows.push({
       importYear: row.importYear,
+      monthIndex: row.monthIndex,
       cliente: row.cliente,
       negocio: row.negocio,
       linea: row.linea,

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { revalidateTag, unstable_cache } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
@@ -183,4 +183,5 @@ export function revalidateDashboardDataCache() {
   revalidateTag(DASHBOARD_IMPORTS_TAG, { expire: 0 });
   revalidateTag(DASHBOARD_ACCOUNTING_TAG, { expire: 0 });
   revalidateTag(DASHBOARD_BUDGET_TAG, { expire: 0 });
+  revalidatePath("/dashboard");
 }

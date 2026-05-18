@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  Area,
   Bar,
   CartesianGrid,
   ComposedChart,
@@ -18,6 +17,8 @@ import { CalendarRange, Crown, Filter, Layers3, TrendingUp } from "lucide-react"
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import type { SalesByClientSummary } from "@/modules/dashboard/services/sales-by-client";
 
+const MONTH_LABELS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"] as const;
+
 type YearAggregate = {
   year: number;
   ventasMonto: number;
@@ -28,6 +29,13 @@ type YearAggregate = {
   avgTicket: number;
   sharePct: number;
   yoyPct: number | null;
+};
+type LineLabelProps = {
+  x?: number | string;
+  y?: number | string;
+  index?: number;
+  value?: number | string;
+  labelCount?: number;
 };
 
 function Surface({
@@ -161,6 +169,48 @@ function percentChange(current: number, previous: number) {
   return ((current - previous) / previous) * 100;
 }
 
+function TicketLineLabel({ x, y, index = 0, value, labelCount = 0 }: LineLabelProps) {
+  const labelX = Number(x);
+  const labelY = Number(y);
+  const amount = Number(value);
+
+  if (!Number.isFinite(labelX) || !Number.isFinite(labelY) || !Number.isFinite(amount)) return null;
+
+  const label = formatCurrency(amount);
+  const isLast = labelCount > 0 && index === labelCount - 1;
+  const isFirst = index === 0;
+  const putBelow = labelY < 36 || index % 2 === 1;
+  const textX = labelX + (isLast ? -10 : isFirst || index % 2 === 0 ? 10 : -10);
+  const textY = labelY + (putBelow ? 22 : -14);
+  const textAnchor = isLast || (!isFirst && index % 2 === 1) ? "end" : "start";
+  const backgroundWidth = Math.max(76, label.length * 7.5);
+  const backgroundX = textAnchor === "end" ? textX - backgroundWidth - 5 : textX - 5;
+
+  return (
+    <g>
+      <rect
+        x={backgroundX}
+        y={textY - 15}
+        width={backgroundWidth}
+        height={22}
+        rx={8}
+        fill="#05080f"
+        opacity={0.84}
+      />
+      <text
+        x={textX}
+        y={textY}
+        textAnchor={textAnchor}
+        fill="#fbbf24"
+        fontSize={12}
+        fontWeight={800}
+      >
+        {label}
+      </text>
+    </g>
+  );
+}
+
 export function SalesYearComparisonDashboard({
   summary,
 }: {
@@ -170,6 +220,8 @@ export function SalesYearComparisonDashboard({
   const [selectedNegocios, setSelectedNegocios] = useState<string[]>(defaultNegocios);
   const [selectedLineas, setSelectedLineas] = useState<string[]>([]);
   const [selectedEjecutivos, setSelectedEjecutivos] = useState<string[]>([]);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const monthOptions = MONTH_LABELS.map((label, index) => ({ label, value: String(index) }));
 
   const availableLineas = useMemo(() => {
     const lineas = new Set<string>();
@@ -200,9 +252,10 @@ export function SalesYearComparisonDashboard({
         if (selectedNegocios.length > 0 && (!row.negocio || !selectedNegocios.includes(row.negocio))) return false;
         if (selectedLineas.length > 0 && (!row.linea || !selectedLineas.includes(row.linea))) return false;
         if (selectedEjecutivos.length > 0 && (!row.ejecutivo || !selectedEjecutivos.includes(row.ejecutivo))) return false;
+        if (selectedMonths.length > 0 && (row.monthIndex === null || !selectedMonths.includes(String(row.monthIndex)))) return false;
         return true;
       }),
-    [selectedEjecutivos, selectedLineas, selectedNegocios, summary.rows],
+    [selectedEjecutivos, selectedLineas, selectedMonths, selectedNegocios, summary.rows],
   );
 
   const yearlyComparison = useMemo(() => {
@@ -268,6 +321,9 @@ export function SalesYearComparisonDashboard({
   const selectedNegocioLabel = selectedNegocios.length ? selectedNegocios.join(", ") : "Todos";
   const selectedLineaLabel = selectedLineas.length ? selectedLineas.join(", ") : "Todas";
   const selectedEjecutivoLabel = selectedEjecutivos.length ? selectedEjecutivos.join(", ") : "Todos";
+  const selectedMonthLabel = selectedMonths.length
+    ? selectedMonths.map((month) => MONTH_LABELS[Number(month)] ?? month).join(", ")
+    : "Todos";
 
   return (
     <div className="min-h-screen bg-[#05080f] text-white">
@@ -278,7 +334,7 @@ export function SalesYearComparisonDashboard({
               Dashboard comparativo
             </p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
-              Ventas por año con señal real de negocio
+              Ventas por año 
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-400">
               Evolucion anual de ventas bajo filtros multiples por negocio, linea y ejecutivo.
@@ -294,6 +350,9 @@ export function SalesYearComparisonDashboard({
               <div className="rounded-full border border-slate-800 bg-slate-950/70 px-4 py-2 text-sm text-slate-300">
                 Ejecutivo: {selectedEjecutivoLabel}
               </div>
+              <div className="rounded-full border border-slate-800 bg-slate-950/70 px-4 py-2 text-sm text-slate-300">
+                Meses: {selectedMonthLabel}
+              </div>
             </div>
           </div>
         </section>
@@ -303,7 +362,20 @@ export function SalesYearComparisonDashboard({
             <Filter className="size-4" />
             <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros multiples</span>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ToggleList
+              label="Meses"
+              options={monthOptions.map((month) => month.label)}
+              selected={selectedMonths.map((month) => MONTH_LABELS[Number(month)] ?? month)}
+              onChange={(values) =>
+                setSelectedMonths(
+                  values.flatMap((value) => {
+                    const option = monthOptions.find((month) => month.label === value);
+                    return option ? [option.value] : [];
+                  }),
+                )
+              }
+            />
             <ToggleList
               label="Negocios"
               options={summary.negocios}
@@ -358,7 +430,7 @@ export function SalesYearComparisonDashboard({
           />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
+        <section className="grid gap-6">
           <Surface className="p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -374,10 +446,10 @@ export function SalesYearComparisonDashboard({
               </p>
             </div>
 
-            <div className="mt-6 h-[430px]">
+            <div className="mt-6 h-[660px]">
               {yearlyComparison.length ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={yearlyComparison} margin={{ top: 44, right: 12, left: 0, bottom: 0 }}>
+                  <ComposedChart data={yearlyComparison} margin={{ top: 72, right: 44, left: 32, bottom: 28 }}>
                     <defs>
                       <linearGradient id="salesYearArea" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.35} />
@@ -389,21 +461,22 @@ export function SalesYearComparisonDashboard({
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.82)", fontSize: 12 }} />
-                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.72)", fontSize: 12 }} tickFormatter={(value) => formatCurrency(Number(value))} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.72)", fontSize: 12 }} tickFormatter={(value) => formatCurrency(Number(value))} />
+                    <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.82)", fontSize: 15, fontWeight: 800 }} height={48} />
+                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.72)", fontSize: 14 }} tickFormatter={(value) => formatCurrency(Number(value))} width={128} />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.72)", fontSize: 14 }} tickFormatter={(value) => formatCurrency(Number(value))} width={112} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Area yAxisId="left" type="monotone" dataKey="ventasMonto" name="Ventas" stroke="#38bdf8" fill="url(#salesYearArea)" strokeWidth={2} />
-                    <Bar yAxisId="left" dataKey="ventasMonto" name="Ventas" fill="url(#salesYearBars)" radius={[12, 12, 0, 0]} maxBarSize={70}>
+                    <Bar yAxisId="left" dataKey="ventasMonto" name="Ventas" fill="url(#salesYearBars)" radius={[12, 12, 0, 0]} maxBarSize={110}>
                       <LabelList
                         position="top"
                         formatter={(value) => formatCurrency(Number(value))}
                         fill="#f8fafc"
-                        fontSize={12}
+                        fontSize={14}
                         fontWeight={800}
                       />
                     </Bar>
-                    <Line yAxisId="right" type="monotone" dataKey="avgTicket" name="Ticket promedio" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: "#f59e0b" }} />
+                    <Line yAxisId="right" type="monotone" dataKey="avgTicket" name="Ticket promedio" stroke="#f59e0b" strokeWidth={4} dot={{ r: 5, fill: "#f59e0b" }}>
+                      <LabelList dataKey="avgTicket" content={<TicketLineLabel labelCount={yearlyComparison.length} />} />
+                    </Line>
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
@@ -414,41 +487,7 @@ export function SalesYearComparisonDashboard({
             </div>
           </Surface>
 
-          <Surface className="p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-              Lectura ejecutiva
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
-              Resumen anual
-            </h2>
-
-            <div className="mt-6 space-y-4">
-              <div className="rounded-3xl border border-slate-800 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Año dominante</p>
-                <p className="mt-2 text-2xl font-semibold text-white">
-                  {bestYear ? bestYear.year : "Sin datos"}
-                </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  {bestYear
-                    ? `${formatCurrency(bestYear.ventasMonto)} y ${bestYear.sharePct.toFixed(1)}% del total visible.`
-                    : "No hay un año dominante con los filtros actuales."}
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-slate-800 bg-slate-950/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Años visibles</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{formatNumber(yearlyComparison.length)}</p>
-                  <p className="mt-2 text-sm text-slate-400">Periodos con ventas para la combinacion actual.</p>
-                </div>
-                <div className="rounded-3xl border border-slate-800 bg-slate-950/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Registros</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{formatNumber(totalOperaciones)}</p>
-                  <p className="mt-2 text-sm text-slate-400">Operaciones usadas para este comparativo.</p>
-                </div>
-              </div>
-            </div>
-          </Surface>
+       
         </section>
       </div>
     </div>

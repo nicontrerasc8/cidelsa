@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, Filter, Goal, ListChecks, Scale, Table2, TrendingUp, WalletCards } from "lucide-react";
+import { BarChart3, Filter, Goal, Scale, Table2, TrendingUp, WalletCards } from "lucide-react";
 
 import type { BudgetVsAccountingSummary } from "@/modules/dashboard/services/financial-dashboards";
 
@@ -70,6 +70,10 @@ function formatNumber(value: number | null | undefined) {
 function formatPercent(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
   return `${new Intl.NumberFormat("es-PE", { maximumFractionDigits: 0 }).format(value)}%`;
+}
+
+function participationPct(value: number, total: number) {
+  return total ? (value / total) * 100 : null;
 }
 
 function ToggleList({
@@ -402,6 +406,8 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
   const comparisonChartHeight = Math.max(520, comparisonChartRows.length * 46);
   const comparisonChartShowsLines = selectedNegocios.length > 0;
   const comparisonTableRows = comparisonChartShowsLines ? lineMetricRows : metricRows;
+  const comparisonTableTotal = comparisonTableRows.reduce((sum, row) => sum + row.currentReal, 0);
+  const showAchievementMarginChart = hasMarginAccess && selectedNegocios.length === 0;
   const lineMonthlyMarginRows = useMemo(
     () => buildLineMonthlyMarginRows({ rows: filteredRows, periodos: activePeriodos }),
     [activePeriodos, filteredRows],
@@ -467,7 +473,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
           </div>
         </section>
 
-        <section className={`grid min-w-0 grid-cols-1 gap-8 ${hasMarginAccess ? "xl:grid-cols-[minmax(0,2fr)_minmax(380px,1fr)]" : ""}`}>
+        <section className="grid min-w-0 grid-cols-1 gap-8">
           <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
               <div>
@@ -535,6 +541,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                         <th className="px-5 py-4 text-right">Variacion</th>
                         <th className="px-5 py-4 text-right">% variacion</th>
                         <th className="px-5 py-4 text-right">% logro</th>
+                        <th className="px-5 py-4 text-right">Participacion</th>
                         {hasMarginAccess ? <th className="px-5 py-4 text-right">MB</th> : null}
                         {hasMarginAccess ? <th className="px-5 py-4 text-right">%MB</th> : null}
                       </tr>
@@ -550,6 +557,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                           <td className={`px-5 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(row.variation)}</td>
                           <td className={`px-5 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatPercent(row.variationPct)}</td>
                           <td className="px-5 py-4 text-right font-semibold tabular-nums text-sky-300">{formatPercent(row.achievementPct)}</td>
+                          <td className="px-5 py-4 text-right font-semibold tabular-nums text-violet-300">{formatPercent(participationPct(row.currentReal, comparisonTableTotal))}</td>
                           {hasMarginAccess ? <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td> : null}
                           {hasMarginAccess ? <td className="px-5 py-4 text-right tabular-nums">{formatPercent(row.grossMarginPct)}</td> : null}
                         </tr>
@@ -564,33 +572,9 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
             </div>
           </div>
 
-          {hasMarginAccess ? <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
-            <h2 className="text-xl font-semibold text-white">Logro y margen</h2>
-            <p className="mt-1 text-sm text-slate-500">% logro PPTO y %MB por negocio.</p>
-            <div className="mt-6 h-[520px] min-h-[520px] min-w-0">
-              {chartRows.length ? (
-                <ResponsiveContainer width="100%" height={520} minWidth={0}>
-                  <ComposedChart data={chartRows} margin={{ top: 32, right: 28, bottom: 110, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis dataKey="negocio" stroke="#ffffff" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#ffffff", fontWeight: 700 }} angle={-25} textAnchor="end" interval={0} height={120} />
-                    <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12, fill: "#cbd5e1" }} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="achievementPct" name="% logro PPTO" radius={[8, 8, 0, 0]}>
-                      {chartRows.map((row, index) => (
-                        <Cell key={row.negocio} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Bar>
-                    <Line type="monotone" dataKey="grossMarginPct" name="%MB" stroke="#a3e635" strokeWidth={3} dot={{ r: 4, fill: "#a3e635" }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyState />
-              )}
-            </div>
-          </div> : null}
         </section>
 
-        {hasMarginAccess ? <section className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(380px,1fr)]">
+        {hasMarginAccess ? <section className="grid min-w-0 grid-cols-1 gap-8">
           <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
               <div>
@@ -647,104 +631,32 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
             </div>
           </div>
 
-          <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
-            <div className="border-b border-slate-800 px-6 py-5">
-              <h2 className="text-xl font-semibold text-white">Detalle MB</h2>
-              <p className="mt-1 text-sm text-slate-500">Ranking visible por {comparisonChartShowsLines ? "linea" : "negocio"}.</p>
+          {/* {showAchievementMarginChart ? <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
+            <h2 className="text-xl font-semibold text-white">Logro y margen</h2>
+            <p className="mt-1 text-sm text-slate-500">% logro PPTO y %MB por negocio.</p>
+            <div className="mt-6 h-[520px] min-h-[520px] min-w-0">
+              {chartRows.length ? (
+                <ResponsiveContainer width="100%" height={520} minWidth={0}>
+                  <ComposedChart data={chartRows} margin={{ top: 32, right: 28, bottom: 110, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="negocio" stroke="#ffffff" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#ffffff", fontWeight: 700 }} angle={-25} textAnchor="end" interval={0} height={120} />
+                    <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12, fill: "#cbd5e1" }} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="achievementPct" name="% logro PPTO" radius={[8, 8, 0, 0]}>
+                      {chartRows.map((row, index) => (
+                        <Cell key={row.negocio} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                    <Line type="monotone" dataKey="grossMarginPct" name="%MB" stroke="#a3e635" strokeWidth={3} dot={{ r: 4, fill: "#a3e635" }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState />
+              )}
             </div>
-            <div className="max-h-[560px] overflow-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-[0.16em] text-slate-500">
-                  <tr>
-                    <th className="px-5 py-4">{comparisonChartShowsLines ? "Linea" : "Negocio"}</th>
-                    <th className="px-5 py-4 text-right">MB {summary.previousYear}</th>
-                    <th className="px-5 py-4 text-right">MB {summary.currentYear}</th>
-                    <th className="px-5 py-4 text-right">%MB</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {comparisonTableRows.map((row) => (
-                    <tr key={`mb-${comparisonChartShowsLines ? `${row.negocio}-${(row as LineMetricRow).linea}` : row.negocio}`} className="hover:bg-white/5">
-                      <td className="px-5 py-4 font-semibold text-white">{comparisonChartShowsLines ? (row as LineMetricRow).linea : row.negocio}</td>
-                      <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.previousGrossMargin)}</td>
-                      <td className="px-5 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td>
-                      <td className="px-5 py-4 text-right font-semibold tabular-nums text-lime-300">{formatPercent(row.grossMarginPct)}</td>
-                    </tr>
-                  ))}
-                  {!comparisonTableRows.length ? (
-                    <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-slate-500">
-                        No hay datos para los filtros actuales.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          </div> : null} */}
         </section> : null}
 
-        <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
-          <div className="flex items-center gap-3 border-b border-slate-800 px-6 py-5">
-            <ListChecks className="size-5 text-sky-400" />
-            <div>
-              <h2 className="text-xl font-semibold text-white">{periodLabel}</h2>
-              <p className="mt-1 text-sm text-slate-500">Resumen agrupado por negocio con las líneas seleccionadas.</p>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.16em] text-slate-500">
-                <tr>
-                  <th className="px-6 py-4">Negocio</th>
-                  <th className="px-6 py-4 text-right">{summary.previousYear} real</th>
-                  <th className="px-6 py-4 text-right">{summary.currentYear} PPTO</th>
-                  <th className="px-6 py-4 text-right">{summary.currentYear} real</th>
-                  <th className="px-6 py-4 text-right">Variacion imp.</th>
-                  <th className="px-6 py-4 text-right">% variacion</th>
-                  <th className="px-6 py-4 text-right">% logro PPTO</th>
-                  {hasMarginAccess ? <th className="px-6 py-4 text-right">MB</th> : null}
-                  {hasMarginAccess ? <th className="px-6 py-4 text-right">%MB</th> : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {metricRows.map((row) => (
-                  <tr key={row.negocio} className="hover:bg-white/5">
-                    <td className="px-6 py-4 font-semibold text-white">{row.negocio}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatNumber(row.previousReal)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatNumber(row.currentBudget)}</td>
-                    <td className="px-6 py-4 text-right font-semibold tabular-nums text-white">{formatNumber(row.currentReal)}</td>
-                    <td className={`px-6 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(row.variation)}</td>
-                    <td className={`px-6 py-4 text-right font-semibold tabular-nums ${row.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatPercent(row.variationPct)}</td>
-                    <td className="px-6 py-4 text-right font-semibold tabular-nums text-sky-300">{formatPercent(row.achievementPct)}</td>
-                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatNumber(row.grossMargin)}</td> : null}
-                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatPercent(row.grossMarginPct)}</td> : null}
-                  </tr>
-                ))}
-                {totalRow ? (
-                  <tr className="border-t-2 border-slate-600 bg-white/5 font-bold text-white">
-                    <td className="px-6 py-4">Total general</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatNumber(totalRow.previousReal)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatNumber(totalRow.currentBudget)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums">{formatNumber(totalRow.currentReal)}</td>
-                    <td className={`px-6 py-4 text-right tabular-nums ${totalRow.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatNumber(totalRow.variation)}</td>
-                    <td className={`px-6 py-4 text-right tabular-nums ${totalRow.variation >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatPercent(totalRow.variationPct)}</td>
-                    <td className="px-6 py-4 text-right tabular-nums text-sky-300">{formatPercent(totalRow.achievementPct)}</td>
-                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatNumber(totalRow.grossMargin)}</td> : null}
-                    {hasMarginAccess ? <td className="px-6 py-4 text-right tabular-nums">{formatPercent(totalRow.grossMarginPct)}</td> : null}
-                  </tr>
-                ) : null}
-                {!metricRows.length ? (
-                  <tr>
-                    <td colSpan={hasMarginAccess ? 9 : 7} className="px-6 py-10 text-center text-slate-500">
-                      No hay datos para los filtros actuales.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
       </div>
     </div>
   );

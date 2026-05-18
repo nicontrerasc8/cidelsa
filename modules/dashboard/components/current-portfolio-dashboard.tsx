@@ -61,12 +61,24 @@ function formatCurrency(value: number | null | undefined) {
 }
 
 function formatCompactCurrency(value: number | null | undefined) {
+  const amount = value || 0;
+  const absAmount = Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+
+  if (absAmount >= 1_000_000) {
+    const millions = new Intl.NumberFormat("es-ES", {
+      maximumFractionDigits: 3,
+    }).format(absAmount / 1_000_000);
+
+    return `${sign}S/ ${millions} M`;
+  }
+
   return new Intl.NumberFormat("es-PE", {
     style: "currency",
     currency: "PEN",
     notation: "compact",
     maximumFractionDigits: 1,
-  }).format(value || 0);
+  }).format(amount);
 }
 
 function ToggleList({
