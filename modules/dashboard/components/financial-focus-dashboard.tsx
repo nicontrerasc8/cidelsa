@@ -687,7 +687,12 @@ export function FinancialFocusDashboard({
     () =>
       summary.rows.filter((row) => {
         if (selectedYearNumber !== null && row.importYear !== selectedYearNumber) return false;
-        if (selectedPeriods.length > 0 && !selectedPeriods.includes(row.periodo)) return false;
+        if (
+          selectedPeriods.length > 0 &&
+          (row.periodo === null || !selectedPeriods.includes(row.periodo))
+        ) {
+          return false;
+        }
         return true;
       }),
     [selectedPeriods, selectedYearNumber, summary.rows],

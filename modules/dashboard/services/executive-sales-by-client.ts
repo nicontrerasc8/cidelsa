@@ -23,6 +23,7 @@ export async function getExecutiveSalesByClientSummary(): Promise<SalesByClientS
 
     rows.push({
       importYear: row.importYear,
+      monthIndex: row.monthIndex,
       cliente: row.cliente,
       negocio: row.negocio,
       linea: row.linea,
