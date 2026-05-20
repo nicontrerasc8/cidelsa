@@ -456,7 +456,18 @@ export function CurrentPortfolioDashboard({ summary }: { summary: CurrentPortfol
           </div>
         </header>
 
-    
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
+            <WalletCards className="size-5 text-sky-400" />
+            <p className="mt-4 text-sm text-slate-400">Monto total</p>
+            <p className="mt-2 text-3xl font-bold text-white">{formatCurrency(total)}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
+            <Rows3 className="size-5 text-emerald-400" />
+            <p className="mt-4 text-sm text-slate-400">Registros</p>
+            <p className="mt-2 text-3xl font-bold text-white">{filteredRows.length.toLocaleString("es-PE")}</p>
+          </div>
+        </section>
 
         <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4">
           <div className="mb-4 flex items-center gap-2 px-1 text-slate-400">
@@ -517,8 +528,8 @@ export function CurrentPortfolioDashboard({ summary }: { summary: CurrentPortfol
                 {compareMode === "negocio" ? "Comparativo por año y negocio" : "Comparativo por año y línea"}
               </h2>
               <div className="flex flex-wrap items-center gap-3">
-              <ViewModeToggle value={comparisonView} onChange={setComparisonView} />
-              <ExportExcelButton onClick={exportComparisonRows} />
+                <ViewModeToggle value={comparisonView} onChange={setComparisonView} />
+                <ExportExcelButton onClick={exportComparisonRows} />
               </div>
             </div>
             <div className="mt-6 min-w-0">
@@ -551,31 +562,31 @@ export function CurrentPortfolioDashboard({ summary }: { summary: CurrentPortfol
               {comparisonView === "chart" && comparisonRows.length ? (
                 <div className="max-h-[780px] overflow-auto">
                   <div style={{ height: comparisonChartHeight, minWidth: comparisonChartWidth }}>
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <BarChart data={comparisonRows} layout="vertical" margin={{ top: 36, right: 96, bottom: 36, left: 36 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis type="number" stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => formatCompactCurrency(Number(value))} tick={{ fontSize: 14, fill: "#cbd5e1", fontWeight: 700 }} />
-                    <YAxis type="category" dataKey="name" width={300} stroke="#ffffff" tickLine={false} axisLine={false} tick={{ fontSize: 14, fill: "#ffffff", fontWeight: 800 }} interval={0} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="facturado" name="Facturado" stackId="comparison" radius={[0, 8, 8, 0]} barSize={34}>
-                      {comparisonRows.map((row, index) => (
-                        <Cell key={`facturado-${row.name}`} fill={COMPARISON_BAR_COLORS[index % COMPARISON_BAR_COLORS.length]} />
-                      ))}
-                      <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={14} fontWeight={900} />
-                    </Bar>
-                    <Bar dataKey="pendiente" name="Pendiente" stackId="comparison" radius={[0, 8, 8, 0]} barSize={34}>
-                      {comparisonRows.map((row, index) => (
-                        <Cell key={`pendiente-${row.name}`} fill={COMPARISON_BAR_COLORS[index % COMPARISON_BAR_COLORS.length]} fillOpacity={0.55} />
-                      ))}
-                      <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={13} fontWeight={800} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                      <BarChart data={comparisonRows} layout="vertical" margin={{ top: 36, right: 96, bottom: 36, left: 36 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis type="number" stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => formatCompactCurrency(Number(value))} tick={{ fontSize: 14, fill: "#cbd5e1", fontWeight: 700 }} />
+                        <YAxis type="category" dataKey="name" width={300} stroke="#ffffff" tickLine={false} axisLine={false} tick={{ fontSize: 14, fill: "#ffffff", fontWeight: 800 }} interval={0} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Bar dataKey="facturado" name="Facturado" stackId="comparison" radius={[0, 8, 8, 0]} barSize={34}>
+                          {comparisonRows.map((row, index) => (
+                            <Cell key={`facturado-${row.name}`} fill={COMPARISON_BAR_COLORS[index % COMPARISON_BAR_COLORS.length]} />
+                          ))}
+                          <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={14} fontWeight={900} />
+                        </Bar>
+                        <Bar dataKey="pendiente" name="Pendiente" stackId="comparison" radius={[0, 8, 8, 0]} barSize={34}>
+                          {comparisonRows.map((row, index) => (
+                            <Cell key={`pendiente-${row.name}`} fill={COMPARISON_BAR_COLORS[index % COMPARISON_BAR_COLORS.length]} fillOpacity={0.55} />
+                          ))}
+                          <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={13} fontWeight={800} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               ) : null}
               {!comparisonRows.length ? (
-                <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-800 text-sm text-slate-500">
+                <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-slate-800 text-sm text-slate-500">
                   No hay datos comparables para los filtros.
                 </div>
               ) : null}
@@ -588,8 +599,8 @@ export function CurrentPortfolioDashboard({ summary }: { summary: CurrentPortfol
                 {compareMode === "negocio" ? "Monto por mes y negocio" : "Monto por mes y línea"}
               </h2>
               <div className="flex flex-wrap items-center gap-3">
-              <ViewModeToggle value={monthView} onChange={setMonthView} />
-              <ExportExcelButton onClick={exportMonthRows} />
+                <ViewModeToggle value={monthView} onChange={setMonthView} />
+                <ExportExcelButton onClick={exportMonthRows} />
               </div>
             </div>
             <div className="mt-6 min-w-0">
@@ -622,36 +633,30 @@ export function CurrentPortfolioDashboard({ summary }: { summary: CurrentPortfol
               {monthView === "chart" && monthRows.length ? (
                 <div className="max-h-[820px] overflow-auto">
                   <div style={{ height: monthChartHeight, minWidth: monthChartWidth }}>
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <BarChart data={monthRows} layout="vertical" margin={{ top: 36, right: 96, bottom: 36, left: 36 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis type="number" stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => formatCompactCurrency(Number(value))} tick={{ fontSize: 14, fill: "#cbd5e1", fontWeight: 700 }} />
-                    <YAxis type="category" dataKey="name" width={320} stroke="#ffffff" tickLine={false} axisLine={false} tick={{ fontSize: 13, fill: "#ffffff", fontWeight: 800 }} interval={0} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="facturado" name="Facturado" stackId="month" fill={CHART_COLORS.facturado} radius={[0, 8, 8, 0]} barSize={30}>
-                      <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={13} fontWeight={900} />
-                    </Bar>
-                    <Bar dataKey="pendiente" name="Pendiente" stackId="month" fill={CHART_COLORS.pendiente} radius={[0, 8, 8, 0]} barSize={30}>
-                      <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={13} fontWeight={800} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                      <BarChart data={monthRows} layout="vertical" margin={{ top: 36, right: 96, bottom: 36, left: 36 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis type="number" stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => formatCompactCurrency(Number(value))} tick={{ fontSize: 14, fill: "#cbd5e1", fontWeight: 700 }} />
+                        <YAxis type="category" dataKey="name" width={320} stroke="#ffffff" tickLine={false} axisLine={false} tick={{ fontSize: 13, fill: "#ffffff", fontWeight: 800 }} interval={0} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Bar dataKey="facturado" name="Facturado" stackId="month" fill={CHART_COLORS.facturado} radius={[0, 8, 8, 0]} barSize={30}>
+                          <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={13} fontWeight={900} />
+                        </Bar>
+                        <Bar dataKey="pendiente" name="Pendiente" stackId="month" fill={CHART_COLORS.pendiente} radius={[0, 8, 8, 0]} barSize={30}>
+                          <LabelList position="right" formatter={(value) => formatCompactCurrency(Number(value))} fill="#f8fafc" fontSize={13} fontWeight={800} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               ) : null}
               {!monthRows.length ? (
-                <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-800 text-sm text-slate-500">
+                <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-slate-800 text-sm text-slate-500">
                   No hay datos mensuales para los filtros.
                 </div>
               ) : null}
             </div>
           </div>
-        </section>
-
-        <section className="grid min-w-0 grid-cols-1 gap-8">
-        
-
-          
         </section>
 
         <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
