@@ -17,6 +17,7 @@ import {
 import {
   BarChart3,
   CircleDollarSign,
+  Download,
   Filter,
   ListOrdered,
   Table2,
@@ -30,6 +31,7 @@ import type {
   SalesByExecutiveRow,
   SalesByExecutiveSummary,
 } from "@/modules/dashboard/services/sales-by-executive";
+import { exportRowsToExcel } from "@/modules/dashboard/utils/export-excel";
 
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"] as const;
 const CHART_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#a78bfa", "#fb7185", "#14b8a6", "#eab308", "#60a5fa"] as const;
@@ -98,7 +100,8 @@ function formatCompactCurrency(value: number | null | undefined) {
     style: "currency",
     currency: "PEN",
     notation: "compact",
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
   }).format(value || 0);
 }
 
@@ -200,6 +203,19 @@ function KpiCard({
   );
 }
 
+function ExportExcelButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/15"
+    >
+      <Download className="size-4" />
+      Exportar Excel
+    </button>
+  );
+}
+
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full min-h-52 items-center justify-center rounded-2xl border border-dashed border-slate-700 text-center text-sm text-slate-500">
@@ -267,7 +283,7 @@ function aggregateExecutives(rows: SalesByExecutiveRow[]): ExecutiveAggregate[] 
         ventasPorLinea: new Map<string, number>(),
         ventasPorCliente: new Map<string, number>(),
       };
-    const linea = row.linea ?? "Sin linea";
+    const linea = row.linea ?? "Sin línea";
     const cliente = row.cliente ?? "Sin cliente";
 
     current.ventasMonto += row.ventasMonto;
@@ -283,7 +299,7 @@ function aggregateExecutives(rows: SalesByExecutiveRow[]): ExecutiveAggregate[] 
 
   return [...map.entries()]
     .map(([ejecutivo, data]) => {
-      const bestLinea = [...data.ventasPorLinea.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["Sin linea", 0];
+      const bestLinea = [...data.ventasPorLinea.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["Sin línea", 0];
       const bestCliente = [...data.ventasPorCliente.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["Sin cliente", 0];
 
       return {
@@ -318,7 +334,7 @@ function aggregateExecutiveLines(rows: SalesByExecutiveRow[]): ExecutiveLineAggr
   >();
 
   for (const row of rows) {
-    const linea = row.linea ?? "Sin linea";
+    const linea = row.linea ?? "Sin línea";
     const key = `${row.ejecutivo}::${linea}`;
     const current =
       map.get(key) ??
@@ -360,8 +376,8 @@ function aggregateExecutiveYearLines(
   for (const row of rows) {
     if (!orderMap.has(row.ejecutivo)) continue;
 
-    const yearLabel = row.importYear ? String(row.importYear) : "Sin anio";
-    const linea = row.linea ?? "Sin linea";
+    const yearLabel = row.importYear ? String(row.importYear) : "Sin año";
+    const linea = row.linea ?? "Sin línea";
     const key = `${row.ejecutivo}::${yearLabel}::${linea}`;
     const current =
       grouped.get(key) ??
@@ -495,7 +511,7 @@ export function SalesByExecutiveDashboard({
       if (row.monthIndex === null) continue;
       if (!visibleMonthIndexes.includes(row.monthIndex)) continue;
 
-      const linea = row.linea ?? "Sin linea";
+      const linea = row.linea ?? "Sin línea";
       const key = `${linea}::${row.ejecutivo}`;
       const current =
         grouped.get(key) ??
@@ -515,6 +531,101 @@ export function SalesByExecutiveDashboard({
     return [...grouped.values()].filter((row) => row.total !== 0).sort((a, b) => b.total - a.total).slice(0, 40);
   }, [filteredRows, visibleMonthIndexes]);
 
+  function exportRankingByYearLine() {
+    void exportRowsToExcel({
+      filename: "ranking-ejecutivos-por-anio-linea.xlsx",
+      sheetName: "Ranking",
+      columns: [
+        { header: "Ejecutivo", key: "ejecutivo", width: 20 },
+        { header: "Año", key: "yearLabel", width: 12 },
+        { header: "Línea", key: "linea", width: 32 },
+        { header: "Venta", key: "ventasMonto", width: 16 },
+        { header: "Operaciones", key: "operaciones", width: 14 },
+      ],
+      rows: executiveYearLineRanking,
+    });
+  }
+
+  function exportPodium() {
+    void exportRowsToExcel({
+      filename: "podio-ejecutivos.xlsx",
+      sheetName: "Podio",
+      columns: [
+        { header: "Ejecutivo", key: "ejecutivo", width: 20 },
+        { header: "Venta", key: "ventasMonto", width: 16 },
+        { header: "% participación", key: "share", width: 18 },
+        { header: "Línea fuerte", key: "bestLinea", width: 32 },
+        { header: "Venta línea fuerte", key: "bestLineaVentas", width: 20 },
+        { header: "Cliente principal", key: "bestCliente", width: 36 },
+        { header: "Venta cliente principal", key: "bestClienteVentas", width: 22 },
+      ],
+      rows: executiveRanking.slice(0, 3),
+    });
+  }
+
+  function exportMonthlyComparison() {
+    void exportRowsToExcel({
+      filename: "comparativo-mensual-ejecutivos.xlsx",
+      sheetName: "Mensual",
+      columns: [
+        { header: "Mes", key: "month", width: 12 },
+        ...visibleExecutivesForMonthly.map((ejecutivo) => ({
+          header: ejecutivo,
+          key: ejecutivo,
+          width: 16,
+        })),
+      ],
+      rows: monthlyExecutiveRows,
+    });
+  }
+
+  function exportMonthlyLineExecutive() {
+    void exportRowsToExcel({
+      filename: "ventas-mensuales-por-linea-ejecutivo.xlsx",
+      sheetName: "Mensual por línea",
+      columns: [
+        { header: "Línea", key: "linea", width: 32 },
+        { header: "Ejecutivo", key: "ejecutivo", width: 20 },
+        ...visibleMonthIndexes.map((monthIndex) => ({
+          header: MONTH_LABELS[monthIndex] ?? String(monthIndex + 1),
+          key: MONTH_LABELS[monthIndex] ?? String(monthIndex + 1),
+          width: 14,
+        })),
+        { header: "Total", key: "total", width: 16 },
+      ],
+      rows: monthlyLineExecutiveRows.map((row) => {
+        const item: Record<string, string | number> = {
+          linea: row.linea,
+          ejecutivo: row.ejecutivo,
+          total: row.total,
+        };
+        for (const monthIndex of visibleMonthIndexes) {
+          item[MONTH_LABELS[monthIndex] ?? String(monthIndex + 1)] = row.months[monthIndex] ?? 0;
+        }
+        return item;
+      }),
+    });
+  }
+
+  function exportExecutiveDetail() {
+    void exportRowsToExcel({
+      filename: "resumen-ejecutivos.xlsx",
+      sheetName: "Resumen",
+      columns: [
+        { header: "Ejecutivo", key: "ejecutivo", width: 20 },
+        { header: "Venta", key: "ventasMonto", width: 16 },
+        { header: "% participación", key: "share", width: 18 },
+        { header: "Operaciones", key: "operaciones", width: 14 },
+        { header: "Clientes", key: "clientes", width: 14 },
+        { header: "Líneas", key: "lineas", width: 14 },
+        { header: "Ticket", key: "ticketPromedio", width: 16 },
+        { header: "Línea fuerte", key: "bestLinea", width: 32 },
+        { header: "Venta línea fuerte", key: "bestLineaVentas", width: 20 },
+      ],
+      rows: executiveRanking,
+    });
+  }
+
   return (
     <div className="min-h-screen bg-[#05080f] text-slate-300">
       <div className="mx-auto max-w-[1500px] space-y-8 px-6 py-10">
@@ -528,7 +639,7 @@ export function SalesByExecutiveDashboard({
             </div>
             <h1 className="mt-3 text-4xl font-bold text-white">Ejecutivos de venta</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-              Ranking y lectura operativa usando solo ventas facturadas de la tabla imports: monto, operaciones, clientes, lineas y evolucion mensual.
+              Ranking y lectura operativa usando solo ventas facturadas de la tabla imports: monto, operaciones, clientes, líneas y evolución mensual.
             </p>
           </div>
         </header>
@@ -536,10 +647,10 @@ export function SalesByExecutiveDashboard({
         <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4">
           <div className="mb-4 flex items-center gap-2 px-1 text-slate-400">
             <Filter className="size-4" />
-            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros multiples</span>
+            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros múltiples</span>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <ToggleList label="Anios" options={summary.years.map(String)} selected={selectedYears} onChange={setSelectedYears} />
+            <ToggleList label="Años" options={summary.years.map(String)} selected={selectedYears} onChange={setSelectedYears} />
             <ToggleList
               label="Meses"
               options={monthOptions.map((month) => month.label)}
@@ -564,7 +675,7 @@ export function SalesByExecutiveDashboard({
               }}
             />
             <ToggleList
-              label="Lineas"
+              label="Líneas"
               options={availableLineas}
               selected={selectedLineas}
               onChange={(values) => {
@@ -579,8 +690,8 @@ export function SalesByExecutiveDashboard({
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title="Venta facturada" value={formatCurrency(totalVentas)} subtitle={`${formatNumber(totalOperaciones)} operaciones facturadas`} icon={<CircleDollarSign className="size-5" />} />
           <KpiCard title="Ticket promedio" value={formatCurrency(ticketPromedio)} subtitle="Venta promedio por fila facturada" icon={<Target className="size-5" />} />
-          <KpiCard title="Clientes atendidos" value={formatNumber(totalClientes)} subtitle="Clientes unicos visibles" icon={<UsersRound className="size-5" />} />
-          <KpiCard title="Lider visible" value={leader?.ejecutivo ?? "-"} subtitle={leader ? `${formatPercent(leader.share)} del total filtrado` : "Sin ventas visibles"} icon={<Trophy className="size-5" />} />
+          <KpiCard title="Clientes atendidos" value={formatNumber(totalClientes)} subtitle="Clientes únicos visibles" icon={<UsersRound className="size-5" />} />
+          <KpiCard title="Líder visible" value={leader?.ejecutivo ?? "-"} subtitle={leader ? `${formatPercent(leader.share)} del total filtrado` : "Sin ventas visibles"} icon={<Trophy className="size-5" />} />
         </section>
 
         <Tabs defaultValue="ranking" className="space-y-6">
@@ -604,11 +715,13 @@ export function SalesByExecutiveDashboard({
               <Surface className="p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h2 className="text-xl font-semibold text-white">Ranking por año y linea</h2>
+                    <h2 className="text-xl font-semibold text-white">Ranking por año y línea</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Cada fila muestra una combinacion ejecutivo-año-linea, ordenada de mayor a menor venta.
+                      Cada fila muestra una combinación ejecutivo-año-línea, ordenada de mayor a menor venta.
                     </p>
                   </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                  <ExportExcelButton onClick={exportRankingByYearLine} />
                   <div className="inline-flex rounded-2xl border border-slate-700 bg-slate-950/70 p-1">
                     <button
                       type="button"
@@ -616,7 +729,7 @@ export function SalesByExecutiveDashboard({
                       className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${rankingViewMode === "chart" ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
                     >
                       <BarChart3 className="size-4" />
-                      Grafico
+                      Gráfico
                     </button>
                     <button
                       type="button"
@@ -626,6 +739,7 @@ export function SalesByExecutiveDashboard({
                       <Table2 className="size-4" />
                       Tabla
                     </button>
+                  </div>
                   </div>
                 </div>
 
@@ -659,7 +773,7 @@ export function SalesByExecutiveDashboard({
                           <th className="px-6 py-4">#</th>
                           <th className="px-6 py-4">Ejecutivo</th>
                           <th className="px-6 py-4">Año</th>
-                          <th className="px-6 py-4">Linea</th>
+                          <th className="px-6 py-4">Línea</th>
                           <th className="px-6 py-4 text-right">Venta</th>
                           <th className="px-6 py-4 text-right">Operaciones</th>
                         </tr>
@@ -690,8 +804,13 @@ export function SalesByExecutiveDashboard({
               </Surface>
 
               <Surface className="p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
                 <h2 className="text-xl font-semibold text-white">Podio</h2>
-                <p className="mt-1 text-sm text-slate-500">Lideres visibles y su foco comercial.</p>
+                <p className="mt-1 text-sm text-slate-500">Líderes visibles y su foco comercial.</p>
+                  </div>
+                  <ExportExcelButton onClick={exportPodium} />
+                </div>
                 <div className="mt-5 space-y-4">
                   {executiveRanking.slice(0, 3).map((row, index) => (
                     <div key={row.ejecutivo} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -703,7 +822,7 @@ export function SalesByExecutiveDashboard({
                         <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-bold text-sky-300">#{index + 1}</span>
                       </div>
                       <div className="mt-4 space-y-1 text-xs text-slate-400">
-                        <p>Linea fuerte: <span className="text-slate-200">{row.bestLinea}</span></p>
+                        <p>Línea fuerte: <span className="text-slate-200">{row.bestLinea}</span></p>
                         <p>Cliente principal: <span className="text-slate-200">{row.bestCliente}</span></p>
                         <p>Share visible: <span className="font-medium text-emerald-400">{formatPercent(row.share)}</span></p>
                       </div>
@@ -718,10 +837,15 @@ export function SalesByExecutiveDashboard({
           <TabsContent value="mensual" className="m-0">
             <div className="space-y-6">
               <Surface className="p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
                 <h2 className="text-xl font-semibold text-white">Comparativo mensual por ejecutivo</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Compara mes a mes los ejecutivos seleccionados. Si no seleccionas ejecutivos, se muestran los 6 principales del ranking visible.
                 </p>
+                  </div>
+                  <ExportExcelButton onClick={exportMonthlyComparison} />
+                </div>
                 <div className="mt-6 h-[460px]">
                   {visibleExecutivesForMonthly.length && monthlyExecutiveRows.length ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -752,16 +876,21 @@ export function SalesByExecutiveDashboard({
 
               <Surface className="overflow-hidden">
                 <div className="border-b border-slate-800 px-6 py-5">
-                  <h2 className="text-xl font-semibold text-white">Tabla mensual por linea y ejecutivo</h2>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                  <h2 className="text-xl font-semibold text-white">Tabla mensual por línea y ejecutivo</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Cruce de ventas facturadas por linea, ejecutivo y mes para comparar cobertura y consistencia.
+                    Cruce de ventas facturadas por línea, ejecutivo y mes para comparar cobertura y consistencia.
                   </p>
+                    </div>
+                    <ExportExcelButton onClick={exportMonthlyLineExecutive} />
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1100px] whitespace-nowrap text-left text-sm">
                     <thead className="bg-slate-950 text-xs uppercase tracking-[0.18em] text-slate-500">
                       <tr>
-                        <th className="sticky left-0 z-10 border-r border-slate-800 bg-slate-950 px-6 py-4">Linea</th>
+                        <th className="sticky left-0 z-10 border-r border-slate-800 bg-slate-950 px-6 py-4">Línea</th>
                         <th className="sticky left-[220px] z-10 border-r border-slate-800 bg-slate-950 px-6 py-4">Ejecutivo</th>
                         {visibleMonthIndexes.map((monthIndex) => (
                           <th key={monthIndex} className="px-4 py-4 text-right">{MONTH_LABELS[monthIndex]}</th>
@@ -786,7 +915,7 @@ export function SalesByExecutiveDashboard({
                       ) : (
                         <tr>
                           <td colSpan={visibleMonthIndexes.length + 3} className="px-6 py-12 text-center text-slate-500">
-                            No hay ventas mensuales por linea para los filtros actuales.
+                            No hay ventas mensuales por línea para los filtros actuales.
                           </td>
                         </tr>
                       )}
@@ -800,8 +929,13 @@ export function SalesByExecutiveDashboard({
           <TabsContent value="detalle" className="m-0">
             <Surface className="overflow-hidden">
               <div className="border-b border-slate-800 px-6 py-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
                 <h2 className="text-xl font-semibold text-white">Resumen por ejecutivo</h2>
                 <p className="mt-1 text-sm text-slate-500">Detalle agregado desde filas facturadas de imports.</p>
+                  </div>
+                  <ExportExcelButton onClick={exportExecutiveDetail} />
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full whitespace-nowrap text-left text-sm">
@@ -814,7 +948,7 @@ export function SalesByExecutiveDashboard({
                       <th className="px-6 py-4 text-right">Operaciones</th>
                       <th className="px-6 py-4 text-right">Clientes</th>
                       <th className="px-6 py-4 text-right">Ticket</th>
-                      <th className="px-6 py-4 text-right">Linea fuerte</th>
+                      <th className="px-6 py-4 text-right">Línea fuerte</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">

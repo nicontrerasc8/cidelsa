@@ -12,10 +12,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { CalendarRange, Crown, Filter, Layers3, TrendingUp } from "lucide-react";
+import { CalendarRange, Crown, Download, Filter, Layers3, TrendingUp } from "lucide-react";
 
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import type { SalesByClientSummary } from "@/modules/dashboard/services/sales-by-client";
+import { exportRowsToExcel } from "@/modules/dashboard/utils/export-excel";
 
 const MONTH_LABELS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"] as const;
 
@@ -128,6 +129,19 @@ function KpiPanel({
         </div>
       </div>
     </Surface>
+  );
+}
+
+function ExportExcelButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/15"
+    >
+      <Download className="size-4" />
+      Exportar Excel
+    </button>
   );
 }
 
@@ -325,6 +339,25 @@ export function SalesYearComparisonDashboard({
     ? selectedMonths.map((month) => MONTH_LABELS[Number(month)] ?? month).join(", ")
     : "Todos";
 
+  function exportYearlyComparison() {
+    void exportRowsToExcel({
+      filename: "ventas-por-anio.xlsx",
+      sheetName: "Ventas por año",
+      columns: [
+        { header: "Año", key: "year", width: 12 },
+        { header: "Ventas", key: "ventasMonto", width: 18 },
+        { header: "Operaciones", key: "operaciones", width: 14 },
+        { header: "Clientes", key: "clientes", width: 14 },
+        { header: "Ejecutivos", key: "ejecutivos", width: 14 },
+        { header: "Líneas", key: "lineas", width: 14 },
+        { header: "Ticket promedio", key: "avgTicket", width: 18 },
+        { header: "% participación", key: "sharePct", width: 18 },
+        { header: "% crecimiento YoY", key: "yoyPct", width: 20 },
+      ],
+      rows: yearlyComparison,
+    });
+  }
+
   return (
     <div className="min-h-screen bg-[#05080f] text-white">
       <div className="mx-auto max-w-[1550px] space-y-8 px-6 py-10">
@@ -334,10 +367,10 @@ export function SalesYearComparisonDashboard({
               Dashboard comparativo
             </p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
-              Ventas por año 
+              Ventas por año
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-400">
-              Evolucion anual de ventas bajo filtros multiples por negocio, linea y ejecutivo.
+              Evolución anual de ventas bajo filtros múltiples por negocio, línea y ejecutivo.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -345,7 +378,7 @@ export function SalesYearComparisonDashboard({
                 Negocio: {selectedNegocioLabel}
               </div>
               <div className="rounded-full border border-slate-800 bg-slate-950/70 px-4 py-2 text-sm text-slate-300">
-                Linea: {selectedLineaLabel}
+                Línea: {selectedLineaLabel}
               </div>
               <div className="rounded-full border border-slate-800 bg-slate-950/70 px-4 py-2 text-sm text-slate-300">
                 Ejecutivo: {selectedEjecutivoLabel}
@@ -360,7 +393,7 @@ export function SalesYearComparisonDashboard({
         <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4">
           <div className="mb-4 flex items-center gap-2 px-1 text-slate-400">
             <Filter className="size-4" />
-            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros multiples</span>
+            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros múltiples</span>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <ToggleList
@@ -387,7 +420,7 @@ export function SalesYearComparisonDashboard({
               }}
             />
             <ToggleList
-              label="Lineas"
+              label="Líneas"
               options={availableLineas}
               selected={selectedLineas}
               onChange={(values) => {
@@ -424,7 +457,7 @@ export function SalesYearComparisonDashboard({
           <KpiPanel
             title="Momentum reciente"
             value={latestGrowth === null ? "N/A" : `${latestGrowth >= 0 ? "+" : ""}${latestGrowth.toFixed(1)}%`}
-            subtitle="Crecimiento del ultimo año vs el anterior"
+            subtitle="Crecimiento del último año vs el anterior"
             icon={Layers3}
             accent="bg-[linear-gradient(90deg,#a78bfa_0%,#818cf8_100%)]"
           />
@@ -432,18 +465,21 @@ export function SalesYearComparisonDashboard({
 
         <section className="grid gap-6">
           <Surface className="p-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  Evolucion anual
+                  Evolución anual
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">
                   Ventas y ticket promedio por año
                 </h2>
               </div>
+              <div className="flex flex-col items-start gap-3 sm:items-end">
+              <ExportExcelButton onClick={exportYearlyComparison} />
               <p className="text-sm text-slate-500">
-                Las barras muestran ventas y la linea muestra ticket promedio.
+                Las barras muestran ventas y la línea muestra ticket promedio.
               </p>
+              </div>
             </div>
 
             <div className="mt-6 h-[660px]">
@@ -481,7 +517,7 @@ export function SalesYearComparisonDashboard({
                 </ResponsiveContainer>
               ) : (
                 <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-800 bg-slate-950/40 text-sm text-slate-500">
-                  No hay datos para la combinacion seleccionada.
+                  No hay datos para la combinación seleccionada.
                 </div>
               )}
             </div>

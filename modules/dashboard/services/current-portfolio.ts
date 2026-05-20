@@ -160,7 +160,7 @@ const loadCurrentPortfolioSummary = unstable_cache(
       rows,
     };
   },
-  ["current-portfolio-summary-v3"],
+  ["current-portfolio-summary-v4"],
   { tags: [DASHBOARD_IMPORTS_TAG] },
 );
 

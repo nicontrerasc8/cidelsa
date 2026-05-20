@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import {
   AlertTriangle,
+  Download,
   Filter,
   LayoutDashboard,
   ListOrdered,
@@ -27,6 +28,8 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
+
+import { exportRowsToExcel } from "@/modules/dashboard/utils/export-excel";
 
 export type SalesByClientSummary = {
   years: number[];
@@ -113,7 +116,8 @@ function formatCompactCurrency(value: number | null | undefined) {
     style: "currency",
     currency: "PEN",
     notation: "compact",
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
   }).format(value || 0);
 }
 
@@ -202,6 +206,19 @@ function TabButton({
   );
 }
 
+function ExportExcelButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/15"
+    >
+      <Download className="size-4" />
+      Exportar Excel
+    </button>
+  );
+}
+
 function EmptyState({ children = "No hay datos para los filtros actuales." }: { children?: React.ReactNode }) {
   return <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-800 text-sm text-slate-500">{children}</div>;
 }
@@ -283,7 +300,7 @@ function buildClientLineRows(rows: SalesByClientSummary["rows"]) {
   const totalVentas = rows.reduce((sum, row) => sum + row.ventasMonto, 0);
 
   for (const row of rows) {
-    const linea = row.linea ?? "Sin linea";
+    const linea = row.linea ?? "Sin línea";
     const negocio = row.negocio ?? "Sin negocio";
     const key = `${row.cliente}::${linea}::${negocio}`;
     const current = grouped.get(key) ?? {
@@ -315,7 +332,7 @@ function buildClientYearLineRows(
     if (!clientOrderMap.has(row.cliente)) continue;
 
     const yearLabel = row.importYear ? String(row.importYear) : "Sin año";
-    const linea = row.linea ?? "Sin linea";
+    const linea = row.linea ?? "Sin línea";
     const key = `${row.cliente}::${yearLabel}::${linea}`;
     const current = grouped.get(key) ?? {
       cliente: row.cliente,
@@ -404,6 +421,73 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
     });
   }, [clientLineRows, topClientNames]);
 
+  function exportTopClients() {
+    void exportRowsToExcel({
+      filename: "top-clientes-por-anio-linea.xlsx",
+      sheetName: "Top clientes",
+      columns: [
+        { header: "Cliente", key: "cliente", width: 36 },
+        { header: "Año", key: "yearLabel", width: 12 },
+        { header: "Línea", key: "linea", width: 28 },
+        { header: "Ventas", key: "ventasMonto", width: 16 },
+        { header: "Operaciones", key: "operaciones", width: 14 },
+      ],
+      rows: topClientBreakdownRows,
+    });
+  }
+
+  function exportClientLines() {
+    void exportRowsToExcel({
+      filename: "clientes-por-linea.xlsx",
+      sheetName: "Clientes por línea",
+      columns: [
+        { header: "Cliente", key: "cliente", width: 36 },
+        { header: "Línea", key: "linea", width: 28 },
+        { header: "Negocio", key: "negocio", width: 20 },
+        { header: "Ventas", key: "ventasMonto", width: 16 },
+        { header: "% cartera", key: "salesShare", width: 14 },
+        { header: "Operaciones", key: "operaciones", width: 14 },
+      ],
+      rows: clientLineRows,
+    });
+  }
+
+  function exportPareto() {
+    void exportRowsToExcel({
+      filename: "pareto-abc-clientes.xlsx",
+      sheetName: "Pareto ABC",
+      columns: [
+        { header: "Cliente", key: "cliente", width: 36 },
+        { header: "ABC", key: "abcClass", width: 10 },
+        { header: "Ventas", key: "ventasMonto", width: 16 },
+        { header: "% cartera", key: "salesShare", width: 14 },
+        { header: "% acumulado", key: "cumulativeShare", width: 16 },
+        { header: "Operaciones", key: "operaciones", width: 14 },
+      ],
+      rows: paretoClients,
+    });
+  }
+
+  function exportClientPortfolio() {
+    void exportRowsToExcel({
+      filename: "cartera-clientes.xlsx",
+      sheetName: "Cartera",
+      columns: [
+        { header: "Cliente", key: "cliente", width: 36 },
+        { header: "ABC", key: "abcClass", width: 10 },
+        { header: "Ventas", key: "ventasMonto", width: 16 },
+        { header: "Ticket promedio", key: "ticketPromedio", width: 18 },
+        { header: "% cartera", key: "salesShare", width: 14 },
+        { header: "% acumulado", key: "cumulativeShare", width: 16 },
+        { header: "Operaciones", key: "operaciones", width: 14 },
+      ],
+      rows: clientRanking.map((row) => ({
+        ...row,
+        ticketPromedio: row.operaciones ? row.ventasMonto / row.operaciones : 0,
+      })),
+    });
+  }
+
   return (
     <div className="min-h-screen bg-[#05080f] text-slate-300">
       <div className="mx-auto max-w-[1500px] space-y-8 px-6 py-10">
@@ -415,9 +499,9 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
               </div>
               <span className="text-xs font-bold uppercase tracking-[0.3em]">Inteligencia comercial</span>
             </div>
-            <h1 className="mt-3 text-4xl font-bold text-white">Analisis y Retencion de Clientes</h1>
+            <h1 className="mt-3 text-4xl font-bold text-white">Análisis y Retención de Clientes</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              Cartera ABC, concentracion de riesgo y detalle de que lineas compra cada cliente.
+              Cartera ABC, concentración de riesgo y detalle de qué líneas compra cada cliente.
             </p>
           </div>
         </header>
@@ -440,7 +524,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
             <AlertTriangle className={`size-5 ${top5Concentration > 50 ? "text-rose-400" : top5Concentration > 30 ? "text-amber-400" : "text-emerald-400"}`} />
-            <p className="mt-4 text-sm text-slate-400">Concentracion top 5</p>
+            <p className="mt-4 text-sm text-slate-400">Concentración top 5</p>
             <p className="mt-2 text-3xl font-bold text-white">{formatPercent(top5Concentration)}</p>
           </div>
         </section>
@@ -448,12 +532,12 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
         <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4">
           <div className="mb-4 flex items-center gap-2 px-1 text-slate-400">
             <Filter className="size-4" />
-            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros multiples</span>
+            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros múltiples</span>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <ToggleList label="Años" options={summary.years.map(String)} selected={selectedYears} onChange={setSelectedYears} />
             <ToggleList label="Negocios" options={summary.negocios} selected={selectedNegocios} onChange={setSelectedNegocios} />
-            <ToggleList label="Lineas" options={summary.lineas} selected={selectedLineas} onChange={setSelectedLineas} />
+            <ToggleList label="Líneas" options={summary.lineas} selected={selectedLineas} onChange={setSelectedLineas} />
             <ToggleList label="Clientes" options={clientes} selected={selectedClientes} onChange={setSelectedClientes} />
           </div>
         </section>
@@ -463,7 +547,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
             Top clientes
           </TabButton>
           <TabButton active={activeTab === "compras"} onClick={() => setActiveTab("compras")} icon={ShoppingBag}>
-            Clientes x linea
+            Clientes por línea
           </TabButton>
           <TabButton active={activeTab === "pareto"} onClick={() => setActiveTab("pareto")} icon={TrendingUp}>
             Pareto ABC
@@ -477,9 +561,11 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
           <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
             <div className="flex flex-col gap-4 border-b border-slate-800 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-            <h2 className="text-xl font-semibold text-white">Top clientes por año y linea</h2>
-            <p className="mt-1 text-sm text-slate-500">Cada barra muestra una combinacion cliente-año-linea bajo los filtros actuales.</p>
+            <h2 className="text-xl font-semibold text-white">Top clientes por año y línea</h2>
+            <p className="mt-1 text-sm text-slate-500">Cada barra muestra una combinación cliente-año-línea bajo los filtros actuales.</p>
               </div>
+              <div className="flex flex-wrap items-center gap-3">
+              <ExportExcelButton onClick={exportTopClients} />
               <div className="inline-flex rounded-2xl border border-slate-700 bg-slate-950/70 p-1">
                 <button
                   type="button"
@@ -487,7 +573,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                   className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${topClientBreakdownViewMode === "chart" ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
                 >
                   <TrendingUp className="size-4" />
-                  Grafico
+                  Gráfico
                 </button>
                 <button
                   type="button"
@@ -497,6 +583,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                   <Table2 className="size-4" />
                   Tabla
                 </button>
+              </div>
               </div>
             </div>
             {topClientBreakdownViewMode === "chart" ? (
@@ -529,7 +616,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                     <tr>
                       <th className="px-6 py-4">Cliente</th>
                       <th className="px-6 py-4">Año</th>
-                      <th className="px-6 py-4">Linea</th>
+                      <th className="px-6 py-4">Línea</th>
                       <th className="px-6 py-4 text-right">Ventas</th>
                       <th className="px-6 py-4 text-right">Operaciones</th>
                     </tr>
@@ -563,11 +650,13 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
           <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
             <div className="flex flex-col gap-4 border-b border-slate-800 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-white">Que compro cada cliente</h2>
+                <h2 className="text-xl font-semibold text-white">Qué compró cada cliente</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Desglose cliente-linea-negocio. Hay {visibleLineas.length} lineas visibles; usa tabla si el grafico queda muy cargado.
+                  Desglose cliente-línea-negocio. Hay {visibleLineas.length} líneas visibles; usa tabla si el gráfico queda muy cargado.
                 </p>
               </div>
+              <div className="flex flex-wrap items-center gap-3">
+              <ExportExcelButton onClick={exportClientLines} />
               <div className="inline-flex rounded-2xl border border-slate-700 bg-slate-950/70 p-1">
                 <button
                   type="button"
@@ -575,7 +664,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                   className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${purchaseViewMode === "chart" ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
                 >
                   <TrendingUp className="size-4" />
-                  Grafico
+                  Gráfico
                 </button>
                 <button
                   type="button"
@@ -585,6 +674,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                   <Table2 className="size-4" />
                   Tabla
                 </button>
+              </div>
               </div>
             </div>
 
@@ -613,7 +703,7 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
                   <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.2em] text-slate-500">
                     <tr>
                       <th className="px-6 py-4">Cliente</th>
-                      <th className="px-6 py-4">Linea</th>
+                      <th className="px-6 py-4">Línea</th>
                       <th className="px-6 py-4">Negocio</th>
                       <th className="px-6 py-4 text-right">Ventas</th>
                
@@ -649,8 +739,13 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
         {activeTab === "pareto" ? (
           <section className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_360px]">
             <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
               <h2 className="text-xl font-semibold text-white">Curva de Pareto ABC</h2>
-              <p className="mt-1 text-sm text-slate-500">Clientes ordenados por ingreso y participacion acumulada.</p>
+              <p className="mt-1 text-sm text-slate-500">Clientes ordenados por ingreso y participación acumulada.</p>
+                </div>
+                <ExportExcelButton onClick={exportPareto} />
+              </div>
               <div className="mt-6 h-[560px] min-h-[560px] min-w-0">
                 {paretoClients.length ? (
                   <ResponsiveContainer width="100%" height={560} minWidth={0}>
@@ -696,8 +791,13 @@ export function SalesByClientDashboard({ summary = mockSummary }: { summary?: Sa
         {activeTab === "detalle" ? (
           <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40">
             <div className="border-b border-slate-800 px-6 py-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
               <h2 className="text-xl font-semibold text-white">Cartera filtrada</h2>
-              <p className="mt-1 text-sm text-slate-500">Ranking ABC completo de clientes segun los filtros activos.</p>
+              <p className="mt-1 text-sm text-slate-500">Ranking ABC completo de clientes según los filtros activos.</p>
+                </div>
+                <ExportExcelButton onClick={exportClientPortfolio} />
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">

@@ -19,6 +19,7 @@ import {
 import {
   Calculator,
   CircleDollarSign,
+  Download,
   Filter,
   LayoutDashboard,
   Scale,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 
 import type { FinancialSummary } from "@/modules/dashboard/services/financial-dashboards";
+import { exportRowsToExcel } from "@/modules/dashboard/utils/export-excel";
 
 const ALL_VALUE = "__all__";
 const MONTH_ORDER = [
@@ -97,7 +99,8 @@ function formatCompactCurrency(value: number | null | undefined) {
     style: "currency",
     currency: "PEN",
     notation: "compact",
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
   }).format(value || 0);
 }
 
@@ -372,6 +375,19 @@ function KpiCard({
   );
 }
 
+function ExportExcelButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/15"
+    >
+      <Download className="size-4" />
+      Exportar Excel
+    </button>
+  );
+}
+
 function SelectFilter({
   label,
   value,
@@ -540,9 +556,9 @@ function buildDashboardCopy(mode: DashboardMode, totals: Totals, hasMarginAccess
           icon: <Scale className="size-5" />,
         },
         {
-          title: "Lineas",
+          title: "Líneas",
           value: new Intl.NumberFormat("es-PE").format(totals.lineCount),
-          subtitle: "Lineas contables visibles",
+          subtitle: "Líneas contables visibles",
           icon: <Calculator className="size-5" />,
         },
       ],
@@ -581,9 +597,9 @@ function buildDashboardCopy(mode: DashboardMode, totals: Totals, hasMarginAccess
           icon: <Scale className="size-5" />,
         },
         {
-          title: "Lineas",
+          title: "Líneas",
           value: new Intl.NumberFormat("es-PE").format(totals.lineCount),
-          subtitle: "Lineas contables visibles",
+          subtitle: "Líneas contables visibles",
           icon: <Calculator className="size-5" />,
         },
       ],
@@ -622,9 +638,9 @@ function buildDashboardCopy(mode: DashboardMode, totals: Totals, hasMarginAccess
           icon: <Scale className="size-5" />,
         },
         {
-          title: "Lineas",
+          title: "Líneas",
           value: new Intl.NumberFormat("es-PE").format(totals.lineCount),
-          subtitle: "Lineas presupuestadas",
+          subtitle: "Líneas presupuestadas",
           icon: <Calculator className="size-5" />,
         },
       ],
@@ -767,17 +783,66 @@ export function FinancialFocusDashboard({
     }))
     .filter((row) => row.value > 0);
 
-  const yearOptions = [{ label: "Historico", value: ALL_VALUE }].concat(
+  const yearOptions = [{ label: "Histórico", value: ALL_VALUE }].concat(
     summary.years.map((year) => ({ label: String(year), value: String(year) })),
   );
   const negocioOptions = [{ label: "Todos los negocios", value: ALL_VALUE }].concat(
     summary.negocios.map((negocio) => ({ label: negocio, value: negocio })),
   );
-  const groupOptions = [{ label: "Todas las categorias", value: ALL_VALUE }].concat(
+  const groupOptions = [{ label: "Todas las categorías", value: ALL_VALUE }].concat(
     summary.grupos.map((grupo) => ({ label: grupo, value: grupo })),
   );
   const tableColSpan =
     mode === "comparison" ? (hasMarginAccess ? 7 : 6) : hasMarginAccess ? 5 : 4;
+
+  function exportChartRows() {
+    void exportRowsToExcel({
+      filename: `${copy.chartTitle.toLowerCase().replace(/\s+/g, "-")}.xlsx`,
+      sheetName: "Periodo",
+      columns: [
+        { header: "Periodo", key: "name", width: 24 },
+        { header: "Cierre previo", key: "previous", width: 18 },
+        { header: "Presupuesto/Contabilidad", key: "planned", width: 24 },
+        { header: "Real", key: "actual", width: 18 },
+        { header: "Margen", key: "grossMargin", width: 18 },
+        { header: "Líneas", key: "lineCount", width: 12 },
+        { header: "Variación", key: "variance", width: 18 },
+        { header: "% logro", key: "achievement", width: 14 },
+        { header: "MG %", key: "marginPct", width: 14 },
+      ],
+      rows: chartRows,
+    });
+  }
+
+  function exportDistributionRows() {
+    void exportRowsToExcel({
+      filename: "participacion-por-categoria.xlsx",
+      sheetName: "Participación",
+      columns: [
+        { header: "Categoría", key: "name", width: 28 },
+        { header: "Valor", key: "value", width: 18 },
+      ],
+      rows: distributionRows,
+    });
+  }
+
+  function exportMetricRows() {
+    void exportRowsToExcel({
+      filename: "detalle-por-categoria.xlsx",
+      sheetName: "Detalle",
+      columns: [
+        { header: "Categoría", key: "name", width: 28 },
+        { header: "Real", key: "actual", width: 18 },
+        { header: "Presupuesto/Contabilidad", key: "planned", width: 24 },
+        { header: "Cierre previo", key: "previous", width: 18 },
+        { header: "Margen", key: "grossMargin", width: 18 },
+        { header: "MG %", key: "marginPct", width: 14 },
+        { header: "Cumplimiento", key: "achievement", width: 16 },
+        { header: "Líneas", key: "lineCount", width: 12 },
+      ],
+      rows: metricRows,
+    });
+  }
 
   return (
     <div className="min-h-screen bg-[#05080f] text-slate-300">
@@ -811,7 +876,7 @@ export function FinancialFocusDashboard({
               onChange={setSelectedPeriods}
             />
             <SelectFilter label="Negocio" value={selectedNegocio} onChange={setSelectedNegocio} options={negocioOptions} />
-            <SelectFilter label="Categoria" value={selectedGroup} onChange={setSelectedGroup} options={groupOptions} />
+            <SelectFilter label="Categoría" value={selectedGroup} onChange={setSelectedGroup} options={groupOptions} />
           </div>
         </header>
 
@@ -829,8 +894,13 @@ export function FinancialFocusDashboard({
 
         <div className="mt-8 grid min-w-0 grid-cols-1 gap-8">
           <Surface className="p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
             <h2 className="text-xl font-semibold text-white">{copy.chartTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{copy.chartSubtitle}</p>
+              </div>
+              <ExportExcelButton onClick={exportChartRows} />
+            </div>
 
             <div className="mt-6 h-[420px] min-h-[420px] min-w-0">
               {chartRows.length ? (
@@ -912,8 +982,13 @@ export function FinancialFocusDashboard({
           </Surface>
 
           <Surface className="p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
             <h2 className="text-xl font-semibold text-white">{copy.distributionTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{copy.distributionSubtitle}</p>
+              </div>
+              <ExportExcelButton onClick={exportDistributionRows} />
+            </div>
 
             <div className="mt-6 h-[320px] min-h-[320px] min-w-0">
               {distributionRows.length ? (
@@ -961,10 +1036,15 @@ export function FinancialFocusDashboard({
 
         <Surface className="mt-8 overflow-hidden">
           <div className="border-b border-slate-800 px-6 py-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
             <h2 className="text-xl font-semibold text-white">Detalle por categoría</h2>
             <p className="mt-1 text-sm text-slate-500">
               Resumen agrupado por categoría para los filtros actuales.
             </p>
+              </div>
+              <ExportExcelButton onClick={exportMetricRows} />
+            </div>
           </div>
 
           <div className="overflow-x-auto">

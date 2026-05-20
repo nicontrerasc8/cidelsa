@@ -15,9 +15,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, Filter, Goal, Scale, Table2, TrendingUp, WalletCards } from "lucide-react";
+import { BarChart3, Download, Filter, Goal, Scale, Table2, TrendingUp, WalletCards } from "lucide-react";
 
 import type { BudgetVsAccountingSummary } from "@/modules/dashboard/services/financial-dashboards";
+import { exportRowsToExcel } from "@/modules/dashboard/utils/export-excel";
 
 const CHART_COLORS = ["#38bdf8", "#f59e0b", "#10b981", "#8b5cf6", "#f43f5e", "#06b6d4", "#84cc16", "#fb7185"] as const;
 
@@ -56,7 +57,8 @@ function formatCompactCurrency(value: number | null | undefined) {
     style: "currency",
     currency: "PEN",
     notation: "compact",
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
   }).format(value || 0);
 }
 
@@ -82,7 +84,7 @@ function ToggleList({
   selected,
   onChange,
   disabled = false,
-  disabledMessage = "Selecciona una opcion previa.",
+  disabledMessage = "Selecciona una opción previa.",
 }: {
   label: string;
   options: string[];
@@ -156,6 +158,19 @@ function KpiCard({
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-slate-200">{icon}</div>
       </div>
     </div>
+  );
+}
+
+function ExportExcelButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/15"
+    >
+      <Download className="size-4" />
+      Exportar Excel
+    </button>
   );
 }
 
@@ -429,6 +444,69 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
     });
   };
 
+  function exportComparisonRows() {
+    void exportRowsToExcel({
+      filename: `real-vs-presupuesto-${comparisonChartShowsLines ? "lineas" : "negocios"}.xlsx`,
+      sheetName: "Real vs presupuesto",
+      columns: [
+        { header: "Negocio", key: "negocio", width: 20 },
+        ...(comparisonChartShowsLines ? [{ header: "Línea", key: "linea" as keyof LineMetricRow, width: 32 }] : []),
+        { header: `${summary.previousYear} real`, key: "previousReal", width: 18 },
+        { header: `${summary.currentYear} PPTO`, key: "currentBudget", width: 18 },
+        { header: `${summary.currentYear} real`, key: "currentReal", width: 18 },
+        { header: "Variación", key: "variation", width: 16 },
+        { header: "% variación", key: "variationPct", width: 16 },
+        { header: "% logro", key: "achievementPct", width: 14 },
+        { header: "Participación", key: "participationPct", width: 16 },
+        { header: "MB", key: "grossMargin", width: 16 },
+        { header: "%MB", key: "grossMarginPct", width: 14 },
+      ],
+      rows: comparisonTableRows.map((row) => ({
+        ...row,
+        linea: "linea" in row ? row.linea : "",
+        participationPct: participationPct(row.currentReal, comparisonTableTotal),
+      })),
+    });
+  }
+
+  function exportMonthlyMarginRows() {
+    void exportRowsToExcel({
+      filename: "mb-mensual-por-linea.xlsx",
+      sheetName: "MB mensual",
+      columns: [
+        { header: "Negocio", key: "negocio", width: 20 },
+        { header: "Línea", key: "linea", width: 32 },
+        ...activePeriodos.flatMap((periodo) => [
+          { header: `${periodo} ${summary.previousYear}`, key: `${periodo} ${summary.previousYear}`, width: 18 },
+          { header: `${periodo} ${summary.currentYear}`, key: `${periodo} ${summary.currentYear}`, width: 18 },
+          { header: `${periodo} Var.`, key: `${periodo} Var.`, width: 16 },
+        ]),
+        { header: `MB ${summary.previousYear}`, key: "totalPreviousMargin", width: 18 },
+        { header: `MB ${summary.currentYear}`, key: "totalMargin", width: 18 },
+        { header: "Variación", key: "variation", width: 16 },
+        { header: "%MB total", key: "totalMarginPct", width: 14 },
+      ],
+      rows: lineMonthlyMarginRows.map((row) => {
+        const item: Record<string, string | number | null> = {
+          negocio: row.negocio,
+          linea: row.linea,
+          totalPreviousMargin: row.totalPreviousMargin,
+          totalMargin: row.totalMargin,
+          variation: row.totalMargin - row.totalPreviousMargin,
+          totalMarginPct: row.totalMarginPct,
+        };
+
+        for (const month of row.monthValues) {
+          item[`${month.periodo} ${summary.previousYear}`] = month.previousMargin;
+          item[`${month.periodo} ${summary.currentYear}`] = month.margin;
+          item[`${month.periodo} Var.`] = month.variation;
+        }
+
+        return item;
+      }),
+    });
+  }
+
   return (
     <div className="min-h-screen bg-[#05080f] text-slate-300">
       <div className="mx-auto max-w-[1500px] space-y-8 px-6 py-10">
@@ -457,18 +535,18 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
         <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4">
           <div className="mb-4 flex items-center gap-2 px-1 text-slate-400">
             <Filter className="size-4" />
-            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros multiples</span>
+            <span className="text-xs font-bold uppercase tracking-[0.2em]">Filtros múltiples</span>
           </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <ToggleList label="Meses" options={summary.periodos} selected={selectedPeriodos} onChange={setSelectedPeriodos} />
             <ToggleList label="Negocios" options={summary.negocios} selected={selectedNegocios} onChange={handleNegociosChange} />
             <ToggleList
-              label="Lineas"
+              label="Líneas"
               options={lineOptions}
               selected={selectedLineas}
               onChange={setSelectedLineas}
               disabled={!selectedNegocios.length}
-              disabledMessage="Marca un negocio para ver sus lineas."
+              disabledMessage="Marca un negocio para ver sus líneas."
             />
           </div>
         </section>
@@ -477,11 +555,13 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
           <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
               <div>
-                <h2 className="text-2xl font-semibold text-white">Real vs presupuesto por {comparisonChartShowsLines ? "linea" : "negocio"}</h2>
+                <h2 className="text-2xl font-semibold text-white">Real vs presupuesto por {comparisonChartShowsLines ? "línea" : "negocio"}</h2>
                 <p className="mt-2 text-base text-slate-400">
                   Compara {summary.previousYear} real, {summary.currentYear} PPTO y {summary.currentYear} real.
                 </p>
               </div>
+              <div className="flex flex-wrap items-center gap-3">
+              <ExportExcelButton onClick={exportComparisonRows} />
               <div className="flex rounded-2xl border border-slate-700 bg-slate-950/70 p-1">
                 <button
                   type="button"
@@ -491,7 +571,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                   }`}
                 >
                   <BarChart3 className="size-4" />
-                  Grafico
+                  Gráfico
                 </button>
                 <button
                   type="button"
@@ -503,6 +583,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                   <Table2 className="size-4" />
                   Tabla
                 </button>
+              </div>
               </div>
             </div>
             <div className="mt-6 h-[520px] min-h-[520px] min-w-0">
@@ -534,14 +615,14 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                     <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-[0.16em] text-slate-500">
                       <tr>
                         <th className="px-5 py-4">Negocio</th>
-                        {comparisonChartShowsLines ? <th className="px-5 py-4">Linea</th> : null}
+                        {comparisonChartShowsLines ? <th className="px-5 py-4">Línea</th> : null}
                         <th className="px-5 py-4 text-right">{summary.previousYear} real</th>
                         <th className="px-5 py-4 text-right">{summary.currentYear} PPTO</th>
                         <th className="px-5 py-4 text-right">{summary.currentYear} real</th>
-                        <th className="px-5 py-4 text-right">Variacion</th>
-                        <th className="px-5 py-4 text-right">% variacion</th>
+                        <th className="px-5 py-4 text-right">Variación</th>
+                        <th className="px-5 py-4 text-right">% variación</th>
                         <th className="px-5 py-4 text-right">% logro</th>
-                        <th className="px-5 py-4 text-right">Participacion</th>
+                        <th className="px-5 py-4 text-right">Participación</th>
                         {hasMarginAccess ? <th className="px-5 py-4 text-right">MB</th> : null}
                         {hasMarginAccess ? <th className="px-5 py-4 text-right">%MB</th> : null}
                       </tr>
@@ -578,11 +659,12 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
           <div className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
               <div>
-                <h2 className="text-2xl font-semibold text-white">MB mensual por linea</h2>
+                <h2 className="text-2xl font-semibold text-white">MB mensual por línea</h2>
                 <p className="mt-2 text-base text-slate-400">
-                  Evolucion de margen bruto por mes, comparando {summary.previousYear} y {summary.currentYear} con los mismos filtros.
+                  Evolución de margen bruto por mes, comparando {summary.previousYear} y {summary.currentYear} con los mismos filtros.
                 </p>
               </div>
+              <ExportExcelButton onClick={exportMonthlyMarginRows} />
             </div>
             <div className="mt-6 h-[520px] min-h-[520px] min-w-0">
               <div className="h-full overflow-auto rounded-2xl border border-slate-800">
@@ -590,7 +672,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                   <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-[0.16em] text-slate-500">
                     <tr>
                       <th className="px-5 py-4">Negocio</th>
-                      <th className="px-5 py-4">Linea</th>
+                      <th className="px-5 py-4">Línea</th>
                       {activePeriodos.flatMap((periodo) => [
                         <th key={`${periodo}-${summary.previousYear}`} className="px-5 py-4 text-right">{periodo} {summary.previousYear}</th>,
                         <th key={`${periodo}-${summary.currentYear}`} className="px-5 py-4 text-right">{periodo} {summary.currentYear}</th>,
@@ -598,7 +680,7 @@ export function BudgetVsAccountingDashboard({ summary }: { summary: BudgetVsAcco
                       ])}
                       <th className="px-5 py-4 text-right">MB {summary.previousYear}</th>
                       <th className="px-5 py-4 text-right">MB {summary.currentYear}</th>
-                      <th className="px-5 py-4 text-right">Variacion</th>
+                      <th className="px-5 py-4 text-right">Variación</th>
                       <th className="px-5 py-4 text-right">%MB total</th>
                     </tr>
                   </thead>
